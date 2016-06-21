@@ -51,7 +51,7 @@ object KeyValueStore {
     extends KeyValueStore[K, V, Unit]
 
   @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
-  final class Ops[K, V, S[_]: Functor](implicit S: KeyValueStoreF[K, V, ?] :<: S)
+  final class Ops[K, V, S[_]](implicit S: KeyValueStore[K, V, ?] :<: S)
     extends LiftedOps[KeyValueStore[K, V, ?], S] {
 
     /** Similar to `alterS`, but returns the updated value. */
@@ -112,7 +112,7 @@ object KeyValueStore {
   }
 
   object Ops {
-    def apply[K, V, S[_]: Functor](implicit S: KeyValueStoreF[K, V, ?] :<: S): Ops[K, V, S] =
+    def apply[K, V, S[_]](implicit S: KeyValueStore[K, V, ?] :<: S): Ops[K, V, S] =
       new Ops[K, V, S]
   }
 
@@ -133,13 +133,11 @@ object KeyValueStore {
 
     final class Aux[K, V] {
       type Ref[A] = AtomicRef[Map[K, V], A]
-      type RefF[A] = Coyoneda[Ref, A]
 
-      // NB: second implicit param not resolved here
-      val R = AtomicRef.Ops[Map[K, V], RefF](Functor[RefF], Inject[RefF, RefF])
+      val R = AtomicRef.Ops[Map[K, V], Ref]
 
-      def apply(): KeyValueStore[K, V, ?] ~> Free[RefF, ?] =
-        new (KeyValueStore[K, V, ?] ~> Free[RefF, ?]) {
+      def apply(): KeyValueStore[K, V, ?] ~> Free[Ref, ?] =
+        new (KeyValueStore[K, V, ?] ~> Free[Ref, ?]) {
           def apply[A](m: KeyValueStore[K, V, A]) = m match {
             case Keys() =>
               R.get.map(_.keys.toVector)

@@ -49,7 +49,7 @@ class ViewMounterSpec extends mutable.Specification with ScalaCheck with TreeMat
   import MountingError._
   import ViewMounterSpec._
 
-  type F[A]      = Free[MountConfigsF, A]
+  type F[A]      = Free[MountConfigs, A]
   type CS[A]     = State[Map[APath, MountConfig], A]
   type Res[A]    = (Map[APath, MountConfig], A)
 
@@ -57,7 +57,7 @@ class ViewMounterSpec extends mutable.Specification with ScalaCheck with TreeMat
     def apply[A](fa: F[A]): Res[A] = {
       def mccs: MountConfigs ~> CS =
         KeyValueStore.toState[State[Map[APath, MountConfig], ?]](MLens.id[Map[APath, MountConfig]])
-      hoistFree[MountConfigsF, CS](Coyoneda.liftTF[MountConfigs, CS](mccs)).apply(fa).run(m)
+      fa.foldMap(mccs).run(m)
     }
   }
 
@@ -66,7 +66,7 @@ class ViewMounterSpec extends mutable.Specification with ScalaCheck with TreeMat
       val fnDNE = sql.invokeFunction("DNE", List[Fix[Sql]]()).embed
       val f     = rootDir </> dir("mnt") </> file("dne")
 
-      eval(Map.empty)(ViewMounter.mount[MountConfigsF](f, fnDNE, Variables.empty))
+      eval(Map.empty)(ViewMounter.mount[MountConfigs](f, fnDNE, Variables.empty))
         ._2 must beLike {
           case -\/(InvalidConfig(_, _)) => ok
         }
@@ -81,7 +81,7 @@ class ViewMounterSpec extends mutable.Specification with ScalaCheck with TreeMat
 
       val f = rootDir </> dir("mnt") </> file("selectStar")
 
-      eval(Map.empty)(ViewMounter.mount[MountConfigsF](f, selStar, Variables.empty))
+      eval(Map.empty)(ViewMounter.mount[MountConfigs](f, selStar, Variables.empty))
         ._1.get(f) must beSome
     }
   }
@@ -93,7 +93,7 @@ class ViewMounterSpec extends mutable.Specification with ScalaCheck with TreeMat
       eval(
         Map(f -> MountConfig.viewConfig(viewConfig("select * from zips")))
         )(
-        ViewMounter.unmount[MountConfigsF](f)
+        ViewMounter.unmount[MountConfigs](f)
         )._1 must beEmpty
     }
   }
@@ -104,13 +104,13 @@ class ViewMounterSpec extends mutable.Specification with ScalaCheck with TreeMat
       val vc = viewConfig("select * from zips")
       val vs = Map[APath, MountConfig](f -> MountConfig.viewConfig(vc))
 
-      eval(vs)(ViewMounter.lookup[MountConfigsF](f).run)._2 must beSome(vc)
+      eval(vs)(ViewMounter.lookup[MountConfigs](f).run)._2 must beSome(vc)
     }
   }
 
   "rewrite" >> {
     "no match" >> {
-      eval(Map())(ViewMounter.rewrite[MountConfigsF](Read(rootDir </> file("zips"))).run)
+      eval(Map())(ViewMounter.rewrite[MountConfigs](Read(rootDir </> file("zips"))).run)
         ._2  must beRightDisjunction.like { case r => r must beTree(Read(rootDir </> file("zips"))) }
     }
 
@@ -119,7 +119,7 @@ class ViewMounterSpec extends mutable.Specification with ScalaCheck with TreeMat
       val vs = Map[APath, MountConfig](
         p -> MountConfig.viewConfig(viewConfig("select * from `/zips`")))
 
-      eval(vs)(ViewMounter.rewrite[MountConfigsF](Read(p)).run)
+      eval(vs)(ViewMounter.rewrite[MountConfigs](Read(p)).run)
         ._2 must beRightDisjunction.like { case r => r must beTree(
           Fix(Squash(Read(rootDir </> file("zips"))))
         )}
@@ -130,7 +130,7 @@ class ViewMounterSpec extends mutable.Specification with ScalaCheck with TreeMat
       val vs = Map[APath, MountConfig](
         p -> MountConfig.viewConfig(viewConfig("select * from zips")))
 
-      eval(vs)(ViewMounter.rewrite[MountConfigsF](Read(p)).run)
+      eval(vs)(ViewMounter.rewrite[MountConfigs](Read(p)).run)
         ._2 must beRightDisjunction.like { case r => r must beTree(
           Fix(Squash(Read(rootDir </> dir("foo") </> file("zips"))))
         )}
@@ -154,7 +154,7 @@ class ViewMounterSpec extends mutable.Specification with ScalaCheck with TreeMat
       val vs = Map[APath, MountConfig](
         p -> MountConfig.viewConfig(inner))
 
-      eval(vs)(ViewMounter.rewrite[MountConfigsF](outer).run)
+      eval(vs)(ViewMounter.rewrite[MountConfigs](outer).run)
         ._2 must beRightDisjunction.like { case r => r must beTree(
           Take(
             Drop(
@@ -171,7 +171,7 @@ class ViewMounterSpec extends mutable.Specification with ScalaCheck with TreeMat
         (rootDir </> dir("view") </> file("view2")) ->
           MountConfig.viewConfig(viewConfig("select * from view1")))
 
-      eval(vs)(ViewMounter.rewrite[MountConfigsF](Read(rootDir </> dir("view") </> file("view2"))).run)
+      eval(vs)(ViewMounter.rewrite[MountConfigs](Read(rootDir </> dir("view") </> file("view2"))).run)
         ._2 must beRightDisjunction.like { case r => r must beTree(
           Squash(Squash(Read(rootDir </> file("zips"))).embed).embed)
         }
@@ -200,7 +200,7 @@ class ViewMounterSpec extends mutable.Specification with ScalaCheck with TreeMat
         Squash(Read(zp)).embed,
         Constant(Data.Bool(true))).embed
 
-      eval(vs)(ViewMounter.rewrite[MountConfigsF](q).run)
+      eval(vs)(ViewMounter.rewrite[MountConfigs](q).run)
         ._2 must beRightDisjunction.like { case r => r must beTree(exp) }
     }
 
@@ -217,9 +217,9 @@ class ViewMounterSpec extends mutable.Specification with ScalaCheck with TreeMat
 
       val vs = Map[APath, MountConfig](p -> MountConfig.viewConfig(q))
 
-      eval(vs)(ViewMounter.lookup[MountConfigsF](p).run)._2 must beSome(q)
+      eval(vs)(ViewMounter.lookup[MountConfigs](p).run)._2 must beSome(q)
 
-      eval(vs)(ViewMounter.rewrite[MountConfigsF](Read(p)).run)
+      eval(vs)(ViewMounter.rewrite[MountConfigs](Read(p)).run)
         ._2 must beRightDisjunction.like { case r => r must beTree(qlp) }
     }
 
@@ -240,7 +240,7 @@ class ViewMounterSpec extends mutable.Specification with ScalaCheck with TreeMat
         v2p -> MountConfig.viewConfig(
           viewConfig(s"select * from `${posixCodec.printPath(v1p)}` limit 10")))
 
-      eval(vs)(ViewMounter.rewrite[MountConfigsF](Read(v2p)).run)
+      eval(vs)(ViewMounter.rewrite[MountConfigs](Read(v2p)).run)
         ._2 must beRightDisjunction.like { case r => r must beTree(
           Take(
             Squash(Drop(
@@ -256,7 +256,7 @@ class ViewMounterSpec extends mutable.Specification with ScalaCheck with TreeMat
     "be empty" ! prop { (dir: ADir) =>
       val vs = Map[APath, MountConfig]()
 
-      eval(vs)(ViewMounter.ls[MountConfigsF](dir))
+      eval(vs)(ViewMounter.ls[MountConfigs](dir))
         ._2 must_== Set()
     }
 
@@ -264,7 +264,7 @@ class ViewMounterSpec extends mutable.Specification with ScalaCheck with TreeMat
       val vs = Map[APath, MountConfig](
         path -> MountConfig.viewConfig(viewConfig("select * from `/foo`")))
 
-      eval(vs)(ViewMounter.ls[MountConfigsF](fileParent(path)))
+      eval(vs)(ViewMounter.ls[MountConfigs](fileParent(path)))
         ._2 must_== Set(fileName(path).right)
     }
 
@@ -274,7 +274,7 @@ class ViewMounterSpec extends mutable.Specification with ScalaCheck with TreeMat
         val vs = Map[APath, MountConfig](
           (dir </> file("view1")) -> MountConfig.viewConfig(viewConfig("select * from `/foo`")))
 
-        eval(vs)(ViewMounter.ls[MountConfigsF](parent))
+        eval(vs)(ViewMounter.ls[MountConfigs](parent))
           ._2 must_== Set(dirName(dir).get.left)
       }
     }

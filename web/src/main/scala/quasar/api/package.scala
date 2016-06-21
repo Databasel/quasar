@@ -17,7 +17,7 @@
 package quasar
 
 import quasar.Predef._
-import quasar.Errors.{ETask, convertError}
+import quasar.Errors.convertError
 import quasar.api.ToQResponse.ops._
 import quasar.effect.Failure
 import quasar.fp._, PathyCodecJson._
@@ -45,14 +45,16 @@ package object api {
     * failure type can be converted to a `QResponse`.
     */
   def failureResponseOr[E](implicit E: ToQResponse[E, ResponseOr])
-                          : Failure[E, ?] ~> ResponseOr = {
+    : Failure[E, ?] ~> ResponseOr =
+    joinResponseOr compose failureResponseT[Task, E]
+
+  def failureResponseT[F[_]: Monad, E](implicit E: ToQResponse[E, ResponseOr])
+    : Failure[E, ?] ~> EitherT[F, Task[Response], ?] = {
 
     def errToResp(e: E): Task[Response] =
       e.toResponse[ResponseOr].toHttpResponse(NaturalTransformation.refl)
 
-    joinResponseOr.compose[Failure[E, ?]](
-      convertError[Task](errToResp).compose[Failure[E, ?]](
-        Failure.toError[ETask[E,?], E]))
+    convertError[F](errToResp) compose Failure.toError[EitherT[F, E, ?], E]
   }
 
   /** Sequences the `Response` on the left with the outer `Task`. */

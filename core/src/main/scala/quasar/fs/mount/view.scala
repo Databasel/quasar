@@ -24,19 +24,19 @@ import quasar.fp.numeric._
 import quasar.fs._, FileSystemError._, PathError._
 import quasar.sql.Sql
 
-import matryoshka._
+import matryoshka.{free => _, _}
 import pathy.Path._
 import scalaz._, Scalaz._
 
 object view {
   /** Translate reads on view paths to the equivalent queries. */
-  def readFile[S[_]: Functor]
+  def readFile[S[_]]
       (implicit
-        S0: ReadFileF :<: S,
-        S1: QueryFileF :<: S,
-        S2: MonotonicSeqF :<: S,
-        S3: ViewStateF :<: S,
-        S4: MountConfigsF :<: S
+        S0: ReadFile :<: S,
+        S1: QueryFile :<: S,
+        S2: MonotonicSeq :<: S,
+        S3: ViewState :<: S,
+        S4: MountConfigs :<: S
       ): ReadFile ~> Free[S, ?] = {
     import ReadFile._
 
@@ -104,10 +104,10 @@ object view {
   }
 
   /** Intercept and fail any write to a view path; all others are passed untouched. */
-  def writeFile[S[_]: Functor]
+  def writeFile[S[_]]
       (implicit
-        S0: WriteFileF :<: S,
-        S1: MountConfigsF :<: S
+        S0: WriteFile :<: S,
+        S1: MountConfigs :<: S
       ): WriteFile ~> Free[S, ?] = {
     import WriteFile._
 
@@ -131,11 +131,11 @@ object view {
 
 
   /** Intercept and handle moves and deletes involving view path(s); all others are passed untouched. */
-  def manageFile[S[_]: Functor]
+  def manageFile[S[_]]
       (implicit
-        S0: ManageFileF :<: S,
-        S1: QueryFileF :<: S,
-        S2: MountConfigsF :<: S
+        S0: ManageFile :<: S,
+        S1: QueryFile :<: S,
+        S2: MountConfigs :<: S
       ): ManageFile ~> Free[S, ?] = {
     import ManageFile._
     import MoveSemantics._
@@ -212,10 +212,10 @@ object view {
 
   /** Intercept and rewrite queries involving views, and overlay views when
     * enumerating files and directories. */
-  def queryFile[S[_]: Functor]
+  def queryFile[S[_]]
       (implicit
-        S0: QueryFileF :<: S,
-        S1: MountConfigsF :<: S
+        S0: QueryFile :<: S,
+        S1: MountConfigs :<: S
       ): QueryFile ~> Free[S, ?] = {
     import QueryFile._
 
@@ -268,15 +268,15 @@ object view {
     * on an underlying filesystem, where references to views have been
     * rewritten as queries against actual files.
     */
-  def fileSystem[S[_]: Functor]
+  def fileSystem[S[_]]
       (implicit
-        S0: ReadFileF :<: S,
-        S1: WriteFileF :<: S,
-        S2: ManageFileF :<: S,
-        S3: QueryFileF :<: S,
-        S4: MonotonicSeqF :<: S,
-        S5: ViewStateF :<: S,
-        S6: MountConfigsF :<: S
+        S0: ReadFile :<: S,
+        S1: WriteFile :<: S,
+        S2: ManageFile :<: S,
+        S3: QueryFile :<: S,
+        S4: MonotonicSeq :<: S,
+        S5: ViewState :<: S,
+        S6: MountConfigs :<: S
       ): FileSystem ~> Free[S, ?] = {
     interpretFileSystem[Free[S, ?]](
       queryFile,
@@ -288,5 +288,5 @@ object view {
 
   // NB: wrapping this in a function seems to help the type checker
   // with the narrowed `A` type.
-  private def emit[S[_]: Functor, A](a: A): Free[S, A] = a.point[Free[S, ?]]
+  private def emit[S[_], A](a: A): Free[S, A] = a.point[Free[S, ?]]
 }

@@ -30,14 +30,13 @@ final class FileSystemMounter[F[_]](fsDef: FileSystemDef[F]) {
   import MountingError._, PathError._, MountConfig._, FileSystemDef._
 
   type MountedFs[A]  = AtomicRef[Mounts[DefinitionResult[F]], A]
-  type MountedFsF[A] = Coyoneda[MountedFs, A]
 
   /** Attempts to mount a filesystem at the given location, using the provided
     * definition.
     */
-  def mount[S[_]: Functor]
+  def mount[S[_]]
       (loc: ADir, typ: FileSystemType, uri: ConnectionUri)
-      (implicit S0: F :<: S, S1: MountedFsF :<: S)
+      (implicit S0: F :<: S, S1: MountedFs :<: S)
       : Free[S, MountingError \/ Unit] = {
 
     type M[A] = Free[S, A]
@@ -67,9 +66,9 @@ final class FileSystemMounter[F[_]](fsDef: FileSystemDef[F]) {
     (failUnlessCandidate *> createFs).flatMap(addMount).run
   }
 
-  def unmount[S[_]: Functor]
+  def unmount[S[_]]
       (loc: ADir)
-      (implicit S0: F :<: S, S1: MountedFsF :<: S)
+      (implicit S0: F :<: S, S1: MountedFs :<: S)
       : Free[S, Unit] = {
 
     mounts[S].modifyS(mnts => (mnts - loc, cleanup[S](mnts, loc))).join
@@ -77,7 +76,7 @@ final class FileSystemMounter[F[_]](fsDef: FileSystemDef[F]) {
 
   ////
 
-  private def cleanup[S[_]: Functor]
+  private def cleanup[S[_]]
               (mnts: Mounts[DefinitionResult[F]], loc: ADir)
               (implicit S: F :<: S)
               : Free[S, Unit] = {
@@ -86,7 +85,7 @@ final class FileSystemMounter[F[_]](fsDef: FileSystemDef[F]) {
       .fold(().point[Free[S, ?]])(free.lift(_).into[S])
   }
 
-  private def mounts[S[_]: Functor](implicit S: MountedFsF :<: S) =
+  private def mounts[S[_]](implicit S: MountedFs :<: S) =
     AtomicRef.Ops[Mounts[DefinitionResult[F]], S]
 }
 

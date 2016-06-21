@@ -30,7 +30,6 @@ package object mongodb {
   type BsonCursor         = AsyncBatchCursor[BsonDocument]
 
   type MongoErr[A]        = Failure[MongoException, A]
-  type MongoErrF[A]       = Coyoneda[MongoErr, A]
   type MongoErrT[F[_], A] = EitherT[F, MongoException, A]
 
   type WorkflowExecErrT[F[_], A] = EitherT[F, WorkflowExecutionError, A]

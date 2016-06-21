@@ -25,6 +25,7 @@ import quasar.sql.Sql
 import eu.timepit.refined.auto._
 import matryoshka.Fix
 import scalaz.{Failure => _, Lens => _, _}, Scalaz._
+import scalaz.iteratee._
 import scalaz.stream.Process
 
 class FilesystemQueries[S[_]](implicit val Q: QueryFile.Ops[S]) {
@@ -32,6 +33,16 @@ class FilesystemQueries[S[_]](implicit val Q: QueryFile.Ops[S]) {
 
   // TODO[scalaz]: Shadow the scalaz.Monad.monadMTMAB SI-2712 workaround
   import EitherT.eitherTMonad
+
+  /** Enumerates the result of executing the given SQL^2 query. */
+  def enumerateQuery(
+    query: Fix[Sql],
+    vars: Variables,
+    off: Natural,
+    lim: Option[Positive]
+  ): CompExecM[EnumeratorT[Data, ExecM]] =
+    compToCompExec(queryPlan(query, vars, off, lim))
+      .map(_.fold(EnumeratorT.enumList(_), Q.enumerate(_)))
 
   /** Returns the source of values from the result of executing the given
     * SQL^2 query.

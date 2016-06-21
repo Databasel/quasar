@@ -21,7 +21,7 @@ import quasar.Predef._
 import quasar.{Data, DataCodec, PhaseResult, Variables}
 import quasar.csv.CsvWriter
 import quasar.effect._
-import quasar.fp._, free.freeCatchable
+import quasar.fp._
 import quasar.fp.numeric._
 import quasar.fs._
 import quasar.fs.mount._
@@ -82,20 +82,23 @@ object Repl {
   }
 
   type RunStateT[A] = AtomicRef[RunState, A]
-  type RunStateF[A] = Coyoneda[RunStateT, A]
 
-  def command[S[_]: Functor](cmd: Command)(implicit
+  def command[S[_]](cmd: Command)(
+    implicit
     Q:  QueryFile.Ops[S],
     M:  ManageFile.Ops[S],
     W:  WriteFile.Ops[S],
     P:  ConsoleIO.Ops[S],
     T:  Timing.Ops[S],
     N:  Mounting.Ops[S],
-    S0: RunStateF :<: S,
-    S1: ReplFailF :<: S,
+    S0: RunStateT :<: S,
+    S1: ReplFail :<: S,
     S2: Task :<: S
   ): Free[S, Unit] = {
     import Command._
+
+    // TODO[scalaz]: Shadow the scalaz.Monad.monadMTMAB SI-2712 workaround
+    import EitherT.eitherTMonad
 
     val RS = AtomicRef.Ops[RunState, S]
     val DF = Failure.Ops[String, S]
@@ -193,7 +196,10 @@ object Repl {
           for {
             state <- RS.get
             expr  <- DF.unattempt_(sql.fixParser.parseInContext(q, state.cwd).leftMap(_.message))
-            query =  fsQ.evaluateQuery(expr, Variables.fromMap(state.variables), 0L, Positive(state.summaryCount + 1L)).runLog
+            vars  =  Variables.fromMap(state.variables)
+            lim   =  Positive(state.summaryCount + 1L)
+            query =  fsQ.enumerateQuery(expr, vars, 0L, lim) flatMap (enum =>
+                       Q.transforms.execToCompExec(enum.drainTo[Vector]))
             _     <- runQuery(state, query)(
                       ds => summarize[S](state.summaryCount, state.format)(ds))
           } yield ())
@@ -218,7 +224,7 @@ object Repl {
     }
   }
 
-  def mountType[S[_]: Functor](path: APath)(implicit
+  def mountType[S[_]](path: APath)(implicit
     M: Mounting.Ops[S]
   ): Free[S, Option[String]] =
     M.lookup(path).map {
@@ -226,7 +232,7 @@ object Repl {
       case MountConfig.FileSystemConfig(FileSystemType(typ), _) => typ
     }.run
 
-  def printLog[S[_]: Functor](debugLevel: DebugLevel, log: Vector[PhaseResult])(implicit
+  def printLog[S[_]](debugLevel: DebugLevel, log: Vector[PhaseResult])(implicit
     P: ConsoleIO.Ops[S]
   ): Free[S, Unit] =
     debugLevel match {
@@ -235,7 +241,7 @@ object Repl {
       case DebugLevel.Verbose => P.println(log.mkString("\n\n") + "\n")
     }
 
-  def summarize[S[_]: Functor](max: Int, format: OutputFormat)(rows: IndexedSeq[Data])(implicit
+  def summarize[S[_]](max: Int, format: OutputFormat)(rows: IndexedSeq[Data])(implicit
     P: ConsoleIO.Ops[S]
   ): Free[S, Unit] = {
     def formatJson(codec: DataCodec)(data: Data) =

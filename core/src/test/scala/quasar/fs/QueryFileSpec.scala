@@ -21,15 +21,25 @@ import quasar.{Data, DataArbitrary, LogicalPlan, PhaseResults}
 import quasar.fp._
 import quasar.scalacheck._
 
-import org.specs2.mutable.Specification
 import org.specs2.ScalaCheck
+import org.specs2.mutable.Specification
+import org.specs2.scalaz.DisjunctionMatchers
 import pathy.Path._
 import pathy.scalacheck.PathyArbitrary._
 import scalaz._, Scalaz._
 import scalaz.scalacheck.ScalazArbitrary._
 
-class QueryFileSpec extends Specification with ScalaCheck with FileSystemFixture {
-  import InMemory._, FileSystemError._, PathError._, DataArbitrary._, query._
+class QueryFileSpec
+  extends Specification
+  with ScalaCheck
+  with FileSystemFixture
+  with DisjunctionMatchers {
+
+  import InMemory._, FileSystemError._, PathError._, DataArbitrary._
+  import query._, transforms.ExecM
+
+  // TODO[scalaz]: Shadow the scalaz.Monad.monadMTMAB SI-2712 workaround
+  import EitherT.eitherTMonad
 
   "QueryFile" should {
     "descendantFiles" >> {
@@ -78,6 +88,38 @@ class QueryFileSpec extends Specification with ScalaCheck with FileSystemFixture
         val state = s.state.copy(queryResps = Map(query -> s.contents))
         val result = MemTask.runLog[FileSystemError, PhaseResults, Data](evaluate(query)).run.run.eval(state)
         result.unsafePerformSync._2.toEither must beRight(s.contents)
+      }
+    }
+
+    "enumerate" >> {
+      "streams results until an empty vector is received" ! prop {
+        s: SingleFileMemState =>
+
+        val query = LogicalPlan.Read(s.file)
+        val state = s.state.copy(queryResps = Map(query -> s.contents))
+        val result = MemTask.interpret(enumerate(query).drainTo[Vector].run.value)
+
+        result.run(state)
+          .unsafePerformSync
+          .leftMap(_.resultMap) ==== ((Map.empty, \/.right(s.contents)))
+      }
+
+      "closes result handle when terminated early" ! prop {
+        s: SingleFileMemState =>
+
+        val n = s.contents.length / 2
+        val query = LogicalPlan.Read(s.file)
+        val state = s.state.copy(queryResps = Map(query -> s.contents))
+        val result = MemTask.interpret(
+          enumeratee.take[Data, ExecM](n)
+            .run(enumerate(query))
+            .drainTo[Vector]
+            .run.value
+        )
+
+        result.run(state)
+          .unsafePerformSync
+          .leftMap(_.resultMap) ==== ((Map.empty, \/.right(s.contents take n)))
       }
     }
   }

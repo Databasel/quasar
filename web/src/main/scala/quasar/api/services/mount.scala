@@ -42,7 +42,12 @@ import scalaz.concurrent.Task
 object mount {
   import posixCodec.printPath
 
-  def service[S[_]: Functor](implicit M: Mounting.Ops[S], S0: Task :<: S, S1: MountConfigsF :<: S): QHttpService[S] =
+  def service[S[_]](
+    implicit
+    M: Mounting.Ops[S],
+    S0: Task :<: S,
+    S1: MountConfigs :<: S
+  ): QHttpService[S] =
     QHttpService {
       case GET -> AsPath(path) =>
         def err = ApiError.fromMsg(
@@ -90,14 +95,14 @@ object mount {
 
   ////
 
-  private def move[S[_]: Functor, T](
+  private def move[S[_], T](
     src: AbsPath[T],
     dstStr: String,
     parse: String => Option[Path[Abs, T, Unsandboxed]],
     typeStr: String
   )(implicit
     M: Mounting.Ops[S],
-    S0: MountConfigsF :<: S
+    S0: MountConfigs :<: S
   ): EitherT[Free[S, ?], ApiError, String] = {
     val mntCfgs = KeyValueStore.Ops[APath, MountConfig, S]
 
@@ -117,19 +122,19 @@ object mount {
         "path" := transcode(UriPathCodec, posixCodec)(dstStr)).point[Free[S, ?]]))
   }
 
-  private def mount[S[_]: Functor](
+  private def mount[S[_]](
     path: APath,
     req: Request,
     replaceIfExists: Boolean
   )(implicit
     M: Mounting.Ops[S],
     S0: Task :<: S,
-    S1: MountConfigsF :<: S
+    S1: MountConfigs :<: S
   ): EitherT[Free[S, ?], ApiError, Boolean] = {
     type FreeS[A] = Free[S, A]
 
     for {
-      body  <- EitherT.right(injectFT[Task, S].apply(
+      body  <- EitherT.right(free.injectFT[Task, S].apply(
                  EntityDecoder.decodeString(req)): FreeS[String])
       bConf <- EitherT.fromDisjunction[FreeS](Parse.decodeWith(
                   body,

@@ -35,7 +35,7 @@ import org.specs2.mutable.Specification
 import org.specs2.scalaz.ScalazMatchers._
 import pathy.Path, Path._
 import pathy.scalacheck.PathyArbitrary._
-import scalaz.{:+: => _, _}, Scalaz._
+import scalaz._, Scalaz._
 import scalaz.concurrent.Task
 
 class MountServiceSpec extends Specification with ScalaCheck with Http4s with PathUtils {
@@ -45,14 +45,15 @@ class MountServiceSpec extends Specification with ScalaCheck with Http4s with Pa
 
   val StubFs = FileSystemType("stub")
 
-  type Eff[A] = (Task :+: (MountingF :+: MountConfigsF)#λ)#λ[A]
+  type Eff0[A] = Coproduct[Mounting, MountConfigs, A]
+  type Eff[A]  = Coproduct[Task, Eff0, A]
 
   val M = Mounting.Ops[Eff]
 
   type HttpSvc = Request => M.F[Response]
 
   def runTest[R: org.specs2.execute.AsResult](f: HttpSvc => M.F[R]): R = {
-    type MEff[A] = (Task :+: MountConfigsF)#λ[A]
+    type MEff[A] = Coproduct[Task, MountConfigs, A]
 
     TaskRef(Map[APath, MountConfig]()).flatMap { ref =>
 
@@ -68,12 +69,12 @@ class MountServiceSpec extends Specification with ScalaCheck with Http4s with Pa
 
       val store: MountConfigs ~> Task = KeyValueStore.fromTaskRef(ref)
 
-      val mt: MEff ~> Task = NaturalTransformation.refl[Task] :+: Coyoneda.liftTF(store)
+      val mt: MEff ~> Task = NaturalTransformation.refl[Task] :+: store
 
-      val tf: MountingF ~> Task = Coyoneda.liftTF(hoistFree(mt) compose mounter)
+      val tf: Mounting ~> Task = foldMapNT(mt) compose mounter
 
       def eff: Eff ~> Task =
-        NaturalTransformation.refl[Task] :+: tf :+: Coyoneda.liftTF(store)
+        NaturalTransformation.refl[Task] :+: tf :+: store
 
       val service = mount.service[Eff].toHttpService(liftMT[Task, ResponseT] compose eff)
 

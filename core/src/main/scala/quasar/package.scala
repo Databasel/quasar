@@ -45,7 +45,6 @@ package object quasar {
   type CompileM[A] = SemanticErrsT[PhaseResultW, A]
 
   type EnvErr[A] = Failure[EnvironmentError, A]
-  type EnvErrF[A] = Coyoneda[EnvErr, A]
   type EnvErrT[F[_], A] = EitherT[F, EnvironmentError, A]
 
   type SeqNameGeneratorT[F[_], A] = StateT[F, Long, A]

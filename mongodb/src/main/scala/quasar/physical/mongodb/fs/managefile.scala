@@ -65,11 +65,11 @@ object managefile {
   }
 
   /** Run [[MongoManage]] with the given `MongoClient`. */
-  def run[S[_]: Functor](
+  def run[S[_]](
     client: MongoClient
   )(implicit
     S0: Task :<: S,
-    S1: MongoErrF :<: S
+    S1: MongoErr :<: S
   ): Task[MongoManage ~> Free[S, ?]] =
     (tmpPrefix |@| TaskRef(0L)) { (prefix, ref) =>
       new (MongoManage ~> Free[S, ?]) {

@@ -49,12 +49,12 @@ object queryfile {
     new QueryFileInterpreter(execMongo)
   }
 
-  def run[C, S[_]: Functor](
+  def run[C, S[_]](
     client: MongoClient,
     defDb: Option[DefaultDb]
   )(implicit
     S0: Task :<: S,
-    S1: MongoErrF :<: S
+    S1: MongoErr :<: S
   ): Task[MongoQuery[C, ?] ~> Free[S, ?]] = {
     type MQ[A] = MongoQuery[C, A]
     type F[A]  = Free[S, A]

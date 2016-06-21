@@ -17,7 +17,7 @@
 package quasar.fs
 
 import quasar.LogicalPlan, LogicalPlan.ReadF
-import quasar.fp.free.injectedNT
+import quasar.fp.free.{flatMapSNT, liftFT, transformIn}
 import quasar.fp.prism._
 
 import matryoshka.{FunctorT, Fix}, FunctorT.ops._
@@ -25,8 +25,6 @@ import monocle.{Lens, Optional}
 import monocle.syntax.fields._
 import monocle.std.tuple2._
 import scalaz.{Optional => _, _}
-import scalaz.std.tuple._
-import scalaz.syntax.functor._
 import scalaz.NaturalTransformation.natToFunction
 import pathy.Path._
 
@@ -39,30 +37,34 @@ object transformPaths {
     * @param inPath transforms input paths
     * @param outPath transforms output paths (including those in errors)
     */
-  def readFile[S[_]: Functor](
+  def readFile[S[_]](
     inPath: AbsPath ~> AbsPath,
     outPath: AbsPath ~> AbsPath
   )(implicit
-    S: ReadFileF :<: S
-  ): S ~> S = {
+    S: ReadFile :<: S
+  ): S ~> Free[S, ?] = {
     import ReadFile._
 
-    val g = new (ReadFile ~> ReadFileF) {
+    val R = ReadFile.Unsafe[S]
+
+    val g = new (ReadFile ~> Free[S, ?]) {
       def apply[A](rf: ReadFile[A]) = rf match {
         case Open(src, off, lim) =>
-          Coyoneda.lift(Open(inPath(src), off, lim))
-            .map(_ bimap (transformErrorPath(outPath), readHFile.modify(outPath(_))))
+          R.open(inPath(src), off, lim)
+            .bimap(transformErrorPath(outPath), readHFile.modify(outPath(_)))
+            .run
 
         case Read(h) =>
-          Coyoneda.lift(Read(readHFile.modify(inPath(_))(h)))
-            .map(_ leftMap transformErrorPath(outPath))
+          R.read(readHFile.modify(inPath(_))(h))
+            .leftMap(transformErrorPath(outPath))
+            .run
 
         case Close(h) =>
-          Coyoneda.lift(Close(readHFile.modify(inPath(_))(h)))
+          R.close(readHFile.modify(inPath(_))(h))
       }
     }
 
-    injectedNT[ReadFileF, S](Coyoneda.liftTF(g))
+    transformIn(g, liftFT[S])
   }
 
   /** Returns a natural transformation that transforms all paths in `WriteFile`
@@ -71,30 +73,33 @@ object transformPaths {
     * @param inPath transforms input paths
     * @param outPath transforms output paths (including those in errors)
     */
-  def writeFile[S[_]: Functor](
+  def writeFile[S[_]](
     inPath: AbsPath ~> AbsPath,
     outPath: AbsPath ~> AbsPath
   )(implicit
-    S: WriteFileF :<: S
-  ): S ~> S = {
+    S: WriteFile :<: S
+  ): S ~> Free[S, ?] = {
     import WriteFile._
 
-    val g = new (WriteFile ~> WriteFileF) {
+    val W = WriteFile.Unsafe[S]
+
+    val g = new (WriteFile ~> Free[S, ?]) {
       def apply[A](wf: WriteFile[A]) = wf match {
         case Open(dst) =>
-          Coyoneda.lift(Open(inPath(dst)))
-            .map(_ bimap (transformErrorPath(outPath), writeHFile.modify(outPath(_))))
+          W.open(inPath(dst))
+            .bimap(transformErrorPath(outPath), writeHFile.modify(outPath(_)))
+            .run
 
         case Write(h, d) =>
-          Coyoneda.lift(Write(writeHFile.modify(inPath(_))(h), d))
+          W.write(writeHFile.modify(inPath(_))(h), d)
             .map(_ map transformErrorPath(outPath))
 
         case Close(h) =>
-          Coyoneda.lift(Close(writeHFile.modify(inPath(_))(h)))
+          W.close(writeHFile.modify(inPath(_))(h))
       }
     }
 
-    injectedNT[WriteFileF, S](Coyoneda.liftTF(g))
+    transformIn(g, liftFT[S])
   }
 
   /** Returns a natural transformation that transforms all paths in `ManageFile`
@@ -103,35 +108,39 @@ object transformPaths {
     * @param inPath transforms input paths
     * @param outPath transforms output paths (including those in errors)
     */
-  def manageFile[S[_]: Functor](
+  def manageFile[S[_]](
     inPath: AbsPath ~> AbsPath,
     outPath: AbsPath ~> AbsPath
-  )(implicit S:
-    ManageFileF :<: S
-  ): S ~> S = {
+  )(implicit
+    S: ManageFile :<: S
+  ): S ~> Free[S, ?] = {
     import ManageFile._, MoveScenario._
 
-    val g = new (ManageFile ~> ManageFileF) {
+    val M = ManageFile.Ops[S]
+
+    val g = new (ManageFile ~> Free[S, ?]) {
       def apply[A](mf: ManageFile[A]) = mf match {
         case Move(scn, sem) =>
-          Coyoneda.lift(Move(
+          M.move(
             scn.fold(
               (src, dst) => dirToDir(inPath(src), inPath(dst)),
               (src, dst) => fileToFile(inPath(src), inPath(dst))),
-            sem))
-            .map(_ leftMap transformErrorPath(outPath))
+            sem
+          ).leftMap(transformErrorPath(outPath)).run
 
         case Delete(p) =>
-          Coyoneda.lift(Delete(inPath(p)))
-            .map(_ leftMap transformErrorPath(outPath))
+          M.delete(inPath(p))
+            .leftMap(transformErrorPath(outPath))
+            .run
 
         case TempFile(p) =>
-          Coyoneda.lift(TempFile(inPath(p)))
-            .map(_ bimap (transformErrorPath(outPath), outPath(_)))
+          M.tempFile(inPath(p))
+            .bimap(transformErrorPath(outPath), outPath(_))
+            .run
       }
     }
 
-    injectedNT[ManageFileF, S](Coyoneda.liftTF(g))
+    transformIn(g, liftFT[S])
   }
 
   /** Returns a natural transformation that transforms all paths in `QueryFile`
@@ -141,49 +150,57 @@ object transformPaths {
     * @param outPath transforms output paths (including those in errors)
     * @param outPathR transforms relative output paths
     */
-  def queryFile[S[_]: Functor](
+  def queryFile[S[_]](
     inPath: AbsPath ~> AbsPath,
     outPath: AbsPath ~> AbsPath,
     outPathR: RelPath ~> RelPath
   )(implicit
-    S: QueryFileF :<: S
-  ): S ~> S = {
+    S: QueryFile :<: S
+  ): S ~> Free[S, ?] = {
     import QueryFile._
 
-    val g = new (QueryFile ~> QueryFileF) {
+    val Q = QueryFile.Ops[S]
+    val U = QueryFile.Unsafe[S]
 
-      val translateFile = natToFunction[AbsPath,AbsPath,File](inPath)
+    val g = new (QueryFile ~> Free[S, ?]) {
+
+      val translateFile = natToFunction[AbsPath, AbsPath, File](inPath)
 
       def apply[A](qf: QueryFile[A]) = qf match {
         case ExecutePlan(lp, out) =>
-          Coyoneda.lift(ExecutePlan(lp.translate(transformLPPaths(translateFile)), inPath(out)))
-            .map(_.map(_.bimap(transformErrorPath(outPath), outPath(_))))
+          Q.execute(lp.translate(transformLPPaths(translateFile)), inPath(out))
+            .bimap(transformErrorPath(outPath), outPath(_))
+            .run.run
 
         case EvaluatePlan(lp) =>
-          Coyoneda.lift(EvaluatePlan(lp.translate(transformLPPaths(translateFile))))
-            .map(_.map(_ leftMap transformErrorPath(outPath)))
+          U.eval(lp.translate(transformLPPaths(translateFile)))
+            .leftMap(transformErrorPath(outPath))
+            .run.run
 
         case More(h) =>
-          Coyoneda.lift(More(h))
-            .map(_ leftMap transformErrorPath(outPath))
+          U.more(h)
+            .leftMap(transformErrorPath(outPath))
+            .run
 
         case Close(h) =>
-          Coyoneda.lift(Close(h))
+          U.close(h)
 
         case Explain(lp) =>
-          Coyoneda.lift(Explain(lp.translate(transformLPPaths(translateFile))))
-            .map(_.map(_ leftMap transformErrorPath(outPath)))
+          Q.explain(lp.translate(transformLPPaths(translateFile)))
+            .leftMap(transformErrorPath(outPath))
+            .run.run
 
         case ListContents(d) =>
-          Coyoneda.lift(ListContents(inPath(d)))
-            .map(_ leftMap transformErrorPath(outPath))
+          Q.ls(inPath(d))
+            .leftMap(transformErrorPath(outPath))
+            .run
 
         case FileExists(f) =>
-          Coyoneda.lift(FileExists(inPath(f)))
+          Q.fileExists(inPath(f))
       }
     }
 
-    injectedNT[QueryFileF, S](Coyoneda.liftTF(g))
+    transformIn(g, liftFT[S])
   }
 
   /** Returns a natural transformation that transforms all paths in `FileSystem`
@@ -193,19 +210,19 @@ object transformPaths {
     * @param outPath transforms output paths (including those in errors)
     * @param outPathR transforms relative output paths
     */
-  def fileSystem[S[_]: Functor](
+  def fileSystem[S[_]](
     inPath: AbsPath ~> AbsPath,
     outPath: AbsPath ~> AbsPath,
     outPathR: RelPath ~> RelPath
   )(implicit
-    S0: ReadFileF :<: S,
-    S1: WriteFileF :<: S,
-    S2: ManageFileF :<: S,
-    S3: QueryFileF :<: S
-  ): S ~> S = {
-    readFile[S](inPath, outPath)   compose
-    writeFile[S](inPath, outPath)  compose
-    manageFile[S](inPath, outPath) compose
+    S0: ReadFile :<: S,
+    S1: WriteFile :<: S,
+    S2: ManageFile :<: S,
+    S3: QueryFile :<: S
+  ): S ~> Free[S, ?] = {
+    flatMapSNT(readFile[S](inPath, outPath))   compose
+    flatMapSNT(writeFile[S](inPath, outPath))  compose
+    flatMapSNT(manageFile[S](inPath, outPath)) compose
     queryFile[S](inPath, outPath, outPathR)
   }
 

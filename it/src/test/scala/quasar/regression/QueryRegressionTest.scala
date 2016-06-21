@@ -34,14 +34,14 @@ import matryoshka.Fix
 import org.specs2.execute._
 import org.specs2.specification.core.Fragment
 import pathy.Path, Path._
-import scalaz.{:+: => _, _}, Scalaz._
+import scalaz._, Scalaz._
 import scalaz.concurrent.Task
 import scalaz.stream.{merge => pmerge, _}
 
-abstract class QueryRegressionTest[S[_]: Functor](
+abstract class QueryRegressionTest[S[_]](
   fileSystems: Task[IList[FileSystemUT[S]]])(
-  implicit S0: QueryFileF :<: S, S1: ManageFileF :<: S,
-           S2: WriteFileF :<: S, S3: Task :<: S
+  implicit S0: QueryFile :<: S, S1: ManageFile :<: S,
+           S2: WriteFile :<: S, S3: Task :<: S
 ) extends FileSystemTest[S](fileSystems) {
 
   import QueryRegressionTest._
@@ -287,7 +287,7 @@ object QueryRegressionTest {
       uts    <- extFs
       mntDir =  rootDir </> dir("hfs-mnt")
       hfsUts <- uts.traverse(ut => hierarchicalFSIO(mntDir, ut.testInterp) map { f =>
-                  ut.copy(testInterp = f).contramap(chroot.fileSystem[FileSystemIO](ut.testDir))
+                  ut.copy(testInterp = f).contramapF(chroot.fileSystem[FileSystemIO](ut.testDir))
                 })
     } yield hfsUts
   }
@@ -297,11 +297,10 @@ object QueryRegressionTest {
       val interpFS = f compose injectNT[FileSystem, FileSystemIO]
 
       val g: FileSystem ~> Free[HfsIO, ?] =
-        hierarchical.fileSystem[Task, HfsIO](Mounts.singleton(mnt, interpFS))
+        flatMapSNT(hierarchical.fileSystem[Task, HfsIO](Mounts.singleton(mnt, interpFS)))
           .compose(chroot.fileSystem[FileSystem](mnt))
 
-      NaturalTransformation.refl[Task] :+:
-      (free.foldMapNT(hfs) compose g)
+      NaturalTransformation.refl[Task] :+: (free.foldMapNT(hfs) compose g)
     }
 
   implicit val dataEncodeJson: EncodeJson[Data] =

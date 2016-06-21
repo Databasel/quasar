@@ -42,7 +42,7 @@ object MonotonicSeq {
   case object Next extends MonotonicSeq[Long]
 
   @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
-  final class Ops[S[_]: Functor](implicit S: MonotonicSeqF :<: S)
+  final class Ops[S[_]](implicit S: MonotonicSeq :<: S)
     extends LiftedOps[MonotonicSeq, S] {
 
     def next: F[Long] =
@@ -50,7 +50,7 @@ object MonotonicSeq {
   }
 
   object Ops {
-    def apply[S[_]: Functor](implicit S: MonotonicSeqF :<: S): Ops[S] =
+    def apply[S[_]](implicit S: MonotonicSeq :<: S): Ops[S] =
       new Ops[S]
   }
 
@@ -59,7 +59,7 @@ object MonotonicSeq {
     */
   def fromTaskRef(ref: TaskRef[Long]): MonotonicSeq ~> Task =
     new (MonotonicSeq ~> Task) {
-      val toST = toState[State[Long,?]](Lens.id[Long])
+      val toST = toState[State[Long, ?]](Lens.id[Long])
       def apply[A](fa: MonotonicSeq[A]) =
         ref.modifyS(toST(fa).run)
     }

@@ -22,6 +22,7 @@ import quasar.api.{redirectService, staticFileService, ResponseOr}
 import quasar.config._
 import quasar.console.{logErrors, stderr}
 import quasar.fp.TaskRef
+import quasar.fp.free.foldMapNT
 import quasar.main._
 
 import argonaut.DecodeJson
@@ -119,9 +120,9 @@ object Server {
       cfgRef       <- TaskRef(webConfig).liftM[MainErrT]
       mntCfgsT     =  writeConfig(WebConfig.mountings, cfgRef, qConfig.configPath)
       coreApi      <- CoreEff.interpreter[WebConfig](mntCfgsT).liftM[MainErrT]
-      ephemeralApi =  CfgsErrsIO.toMainTask(MntCfgsIO.ephemeral) compose coreApi
+      ephemeralApi =  foldMapNT(CfgsErrsIO.toMainTask(MntCfgsIO.ephemeral)) compose coreApi
       _            <- (mountAll[CoreEff](webConfig.mountings) foldMap ephemeralApi).flatMapF(_.point[Task])
-      durableApi   =  toResponseOr(MntCfgsIO.durable[WebConfig](mntCfgsT)) compose coreApi
+      durableApi   =  foldMapNT(toResponseOr(MntCfgsIO.durable[WebConfig](mntCfgsT))) compose coreApi
     } yield service(
       webConfig.server.port,
       qConfig.staticContent,

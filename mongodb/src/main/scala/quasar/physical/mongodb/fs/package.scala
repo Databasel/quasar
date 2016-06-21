@@ -17,7 +17,7 @@
 package quasar.physical.mongodb
 
 import quasar.Predef._
-import quasar.{EnvironmentError, EnvErrT, EnvErr, EnvErrF, NameGenerator => NG}
+import quasar.{EnvironmentError, EnvErrT, EnvErr, NameGenerator => NG}
 import quasar.config._
 import quasar.effect.Failure
 import quasar.fp._
@@ -27,7 +27,7 @@ import quasar.fs.mount.{ConnectionUri, FileSystemDef}
 import quasar.physical.mongodb.fs.bsoncursor._
 
 import com.mongodb.async.client.MongoClient
-import scalaz.{:+: => _, _}
+import scalaz._
 import scalaz.syntax.monad._
 import scalaz.syntax.either._
 import scalaz.syntax.show._
@@ -48,12 +48,12 @@ package object fs {
 
   final case class TmpPrefix(run: String) extends scala.AnyVal
 
-  def mongoDbFileSystem[S[_]: Functor](
+  def mongoDbFileSystem[S[_]](
     client: MongoClient,
     defDb: Option[DefaultDb]
   )(implicit
     S0: Task :<: S,
-    S1: MongoErrF :<: S
+    S1: MongoErr :<: S
   ): EnvErrT[Task, FileSystem ~> Free[S, ?]] = {
     val runM = Hoist[EnvErrT].hoist(MongoDbIO.runNT(client))
 
@@ -72,9 +72,9 @@ package object fs {
         mfile compose managefile.interpret))
   }
 
-  def mongoDbFileSystemDef[S[_]: Functor](implicit
+  def mongoDbFileSystemDef[S[_]](implicit
     S0: Task :<: S,
-    S1: MongoErrF :<: S
+    S1: MongoErr :<: S
   ): FileSystemDef[Free[S, ?]] = FileSystemDef.fromPF[Free[S, ?]] {
     case (MongoDBFsType, uri) =>
       type M[A] = Free[S, A]
@@ -92,7 +92,8 @@ package object fs {
 
   ////
 
-  private type Eff[A] = (Task :+: (EnvErrF :+: CfgErrF)#λ)#λ[A]
+  private type Eff0[A] = Coproduct[EnvErr, CfgErr, A]
+  private type Eff[A]  = Coproduct[Task, Eff0, A]
 
   private def findDefaultDb: MongoDbIO[Option[DefaultDb]] =
     (for {
@@ -103,7 +104,7 @@ package object fs {
                   .attempt.void.liftM[OptionT]
     } yield DefaultDb(dbName)).run
 
-  private def asyncClientDef[S[_]: Functor](
+  private def asyncClientDef[S[_]](
     uri: ConnectionUri
   )(implicit
     S0: Task :<: S
@@ -115,15 +116,13 @@ package object fs {
     type MEConfigErr[A] = ME[ConfigError,A]
     type DefM[A] = DefErrT[M, A]
 
-    val evalEnvErr: EnvErrF ~> DefM =
-      Coyoneda.liftTF[EnvErr, DefM](
-        convertError[M]((_: EnvironmentError).right[NonEmptyList[String]])
-          .compose[EnvErr](Failure.toError[MEEnvErr, EnvironmentError]))
+    val evalEnvErr: EnvErr ~> DefM =
+      convertError[M]((_: EnvironmentError).right[NonEmptyList[String]])
+        .compose(Failure.toError[MEEnvErr, EnvironmentError])
 
-    val evalCfgErr: CfgErrF ~> DefM =
-      Coyoneda.liftTF[CfgErr, DefM](
-        convertError[M]((_: ConfigError).shows.wrapNel.left[EnvironmentError])
-          .compose[CfgErr](Failure.toError[MEConfigErr, ConfigError]))
+    val evalCfgErr: CfgErr ~> DefM =
+      convertError[M]((_: ConfigError).shows.wrapNel.left[EnvironmentError])
+        .compose(Failure.toError[MEConfigErr, ConfigError])
 
     val liftTask: Task ~> DefM =
       liftMT[M, DefErrT] compose liftFT[S] compose injectNT[Task, S]

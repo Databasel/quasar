@@ -16,6 +16,8 @@
 
 package quasar.fs
 
+import quasar.fp.free.flatMapSNT
+
 import scalaz._, NaturalTransformation.refl
 
 object mounted {
@@ -23,38 +25,38 @@ object mounted {
   /** Strips the `mountPoint` off of all input paths in `ReadFile` operations
     * and restores it on output paths.
     */
-   def readFile[S[_]: Functor](mountPoint: ADir)(implicit S: ReadFileF :<: S): S ~> S =
+   def readFile[S[_]](mountPoint: ADir)(implicit S: ReadFile :<: S): S ~> Free[S, ?] =
      transformPaths.readFile[S](stripPrefixA(mountPoint), rebaseA(mountPoint))
 
   /** Strips the `mountPoint` off of all input paths in `WriteFile` operations
     * and restores it on output paths.
     */
-  def writeFile[S[_]: Functor](mountPoint: ADir)(implicit S: WriteFileF :<: S): S ~> S =
+  def writeFile[S[_]](mountPoint: ADir)(implicit S: WriteFile :<: S): S ~> Free[S, ?] =
     transformPaths.writeFile[S](stripPrefixA(mountPoint), rebaseA(mountPoint))
 
   /** Strips the `mountPoint` off of all input paths in `ManageFile` operations
     * and restores it on output paths.
     */
-  def manageFile[S[_]: Functor](mountPoint: ADir)(implicit S: ManageFileF :<: S): S ~> S =
+  def manageFile[S[_]](mountPoint: ADir)(implicit S: ManageFile :<: S): S ~> Free[S, ?] =
     transformPaths.manageFile[S](stripPrefixA(mountPoint), rebaseA(mountPoint))
 
   /** Strips the `mountPoint` off of all input paths in `QueryFile` operations
     * and restores it on output paths.
     */
-  def queryFile[S[_]: Functor](mountPoint: ADir)(implicit S: QueryFileF :<: S): S ~> S =
+  def queryFile[S[_]](mountPoint: ADir)(implicit S: QueryFile :<: S): S ~> Free[S, ?] =
     transformPaths.queryFile[S](stripPrefixA(mountPoint), rebaseA(mountPoint), refl)
 
-  def fileSystem[S[_]: Functor](
+  def fileSystem[S[_]](
     mountPoint: ADir
   )(implicit
-    S0: ReadFileF :<: S,
-    S1: WriteFileF :<: S,
-    S2: ManageFileF :<: S,
-    S3: QueryFileF :<: S
-  ): S ~> S = {
-    readFile[S](mountPoint)   compose
-    writeFile[S](mountPoint)  compose
-    manageFile[S](mountPoint) compose
+    S0: ReadFile :<: S,
+    S1: WriteFile :<: S,
+    S2: ManageFile :<: S,
+    S3: QueryFile :<: S
+  ): S ~> Free[S, ?] = {
+    flatMapSNT(readFile[S](mountPoint))   compose
+    flatMapSNT(writeFile[S](mountPoint))  compose
+    flatMapSNT(manageFile[S](mountPoint)) compose
     queryFile[S](mountPoint)
   }
 }

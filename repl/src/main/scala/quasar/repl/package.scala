@@ -20,11 +20,6 @@ import quasar.Predef._
 
 import quasar.effect.Failure
 
-import scalaz.{Failure => _, _}
-
 package object repl {
-  type ConsoleIOF[A] = Coyoneda[ConsoleIO, A]
-
   type ReplFail[A] = Failure[String, A]
-  type ReplFailF[A] = Coyoneda[ReplFail, A]
 }

@@ -19,7 +19,7 @@ package quasar
 import quasar.regression._
 import quasar.sql.Sql
 
-import scala.{None}
+import scala.None
 
 import eu.timepit.refined.auto._
 import matryoshka.{Fix}

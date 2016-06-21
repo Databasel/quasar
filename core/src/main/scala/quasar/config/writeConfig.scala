@@ -18,15 +18,15 @@ package quasar.config
 
 import quasar.Predef._
 import quasar.effect._
-import quasar.fp.{TaskRef}
+import quasar.fp.TaskRef
 import quasar.fp.free, free._
-import quasar.fs.{APath}
+import quasar.fs.APath
 import quasar.fs.mount._
 
-import argonaut.{EncodeJson}
-import monocle.{Lens}
-import scalaz.{Lens => _, :+: => _, _}
-import scalaz.concurrent.{Task}
+import argonaut.EncodeJson
+import monocle.Lens
+import scalaz.{Lens => _, _}
+import scalaz.concurrent.Task
 
 /** Interpreter providing access to configuration, based on some concrete Config type. */
 object writeConfig {
@@ -35,38 +35,34 @@ object writeConfig {
     : MountConfigs ~> Task = {
 
     type MRef[A] = AtomicRef[Map[APath, MountConfig], A]
-    type MRefF[A] = Coyoneda[MRef, A]
 
-    type ConfigRef[A] = AtomicRef[Cfg, A]
-    type ConfigRefF[A] = Coyoneda[ConfigRef, A]
-    type ConfigRefM[A] = Free[ConfigRefF, A]
+    type ConfigRef[A]  = AtomicRef[Cfg, A]
+    type ConfigRefM[A] = Free[ConfigRef, A]
 
-    type ConfigRefPlusTask[A] = Coproduct[ConfigRefF, Task, A]
+    type ConfigRefPlusTask[A]  = Coproduct[ConfigRef, Task, A]
     type ConfigRefPlusTaskM[A] = Free[ConfigRefPlusTask, A]
 
     // AtomicRef[Cfg, ?] ~> Task (with writing the config file):
-    val configRef: ConfigRefF ~> Task = {
+    val configRef: ConfigRef ~> Task = {
       val refToTask: ConfigRef ~> Task = AtomicRef.fromTaskRef(ref)
 
       val write: Cfg => Task[Unit] = ConfigOps[Cfg].toFile(_, loc)
       def writing: ConfigRef ~> ConfigRefPlusTaskM = AtomicRef.onSet[Cfg](write)
 
       val refToTaskF: ConfigRefPlusTask ~> Task =
-        Coyoneda.liftTF(refToTask) :+: NaturalTransformation.refl
+        refToTask :+: NaturalTransformation.refl
 
-      free.foldMapNT(refToTaskF).compose[ConfigRefF](Coyoneda.liftTF(writing))
+      free.foldMapNT(refToTaskF) compose writing
     }
 
     // AtomicRef[Map[APath, MountConfig], ?] ~> Free[AtomicRef[Cfg, ?], ?]:
-    val mapToConfig: MRefF ~> ConfigRefM =  {
-      Coyoneda.liftTF[MRef, ConfigRefM]{
-        val aux = AtomicRef.zoom(mountingsLens composeIso MountingsConfig.mapIso)
-        aux.into[aux.RefAF]
-      }
-    }
+    val mapToConfig: MRef ~> ConfigRefM =
+      AtomicRef.zoom(mountingsLens composeIso MountingsConfig.mapIso)
+        .into[AtomicRef[Cfg, ?]]
 
     // KeyValueStore[APath, MountConfig, ?] ~> Free[AtomicRef[Map[APath, MountConfig], ?]]:
-    val storeToMap: MountConfigs ~> Free[MRefF, ?] = KeyValueStore.toAtomicRef[APath, MountConfig]()
+    val storeToMap: MountConfigs ~> Free[MRef, ?] =
+      KeyValueStore.toAtomicRef[APath, MountConfig]()
 
     free.foldMapNT(configRef) compose (free.foldMapNT(mapToConfig) compose storeToMap)
   }

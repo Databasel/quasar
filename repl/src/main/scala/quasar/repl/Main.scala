@@ -31,7 +31,7 @@ import org.jboss.aesh.console.helper.InterruptHook
 import org.jboss.aesh.console.settings.SettingsBuilder
 import org.jboss.aesh.edit.actions.Action
 import pathy.Path, Path._
-import scalaz.{Failure => _, :+: => _, _}, Scalaz._
+import scalaz.{Failure => _, _}, Scalaz._
 import scalaz.concurrent.Task
 
 object Main {
@@ -44,7 +44,8 @@ object Main {
       }
     }
 
-  type DriverEff[A] = (ReplFailF :+: (ConsoleIOF :+: Task)#λ)#λ[A]
+  type DriverEff0[A] = Coproduct[ConsoleIO, Task, A]
+  type DriverEff[A]  = Coproduct[ReplFail, DriverEff0, A]
   type DriverEffM[A] = Free[DriverEff, A]
 
   private def driver(f: Command => Free[DriverEff, Unit]): Task[Unit] = Task.delay {
@@ -62,8 +63,8 @@ object Main {
     console.setPrompt(new Prompt("💪 $ "))
 
     val i: DriverEff ~> MainTask =
-      Coyoneda.liftTF[ReplFail, MainTask](Failure.toError[MainTask, String])          :+:
-      liftMT[Task, MainErrT].compose[ConsoleIOF](Coyoneda.liftTF(consoleIO(console))) :+:
+      Failure.toError[MainTask, String]                  :+:
+      liftMT[Task, MainErrT].compose(consoleIO(console)) :+:
       liftMT[Task, MainErrT]
 
     console.setConsoleCallback(new AeshConsoleCallback() {
@@ -85,18 +86,20 @@ object Main {
     ()
   }
 
-  type ReplEff[A] =
-    (Repl.RunStateF :+: (ConsoleIOF :+: (ReplFailF :+: (TimingF :+: (Task :+: MountingFileSystem)#λ)#λ)#λ)#λ)#λ[A]
+  type ReplEff0[A] = Coproduct[Task, MountingFileSystem, A]
+  type ReplEff1[A] = Coproduct[Timing, ReplEff0, A]
+  type ReplEff2[A] = Coproduct[ReplFail, ReplEff1, A]
+  type ReplEff3[A] = Coproduct[ConsoleIO, ReplEff2, A]
+  type ReplEff[A]  = Coproduct[Repl.RunStateT, ReplEff3, A]
 
   def repl(fs: MountingFileSystem ~> DriverEffM): Task[Command => Free[DriverEff, Unit]] = {
     TaskRef(Repl.RunState(rootDir, DebugLevel.Normal, 10, OutputFormat.Table, Map())).map { ref =>
       val i: ReplEff ~> DriverEffM =
-        injectFT[Task, DriverEff].compose[Repl.RunStateF](
-          Coyoneda.liftTF[Repl.RunStateT, Task](AtomicRef.fromTaskRef(ref)))       :+:
-        injectFT[ConsoleIOF, DriverEff]                                            :+:
-        injectFT[ReplFailF, DriverEff]                                             :+:
-        injectFT[Task, DriverEff].compose[TimingF](Coyoneda.liftTF(Timing.toTask)) :+:
-        injectFT[Task, DriverEff]                                                  :+:
+        injectFT[Task, DriverEff].compose(AtomicRef.fromTaskRef(ref)) :+:
+        injectFT[ConsoleIO, DriverEff]                                :+:
+        injectFT[ReplFail, DriverEff]                                 :+:
+        injectFT[Task, DriverEff].compose(Timing.toTask)              :+:
+        injectFT[Task, DriverEff]                                     :+:
         fs
 
       (cmd => Repl.command[ReplEff](cmd).foldMap(i))
@@ -134,10 +137,11 @@ object Main {
       cfgRef       <- TaskRef(config).liftM[MainErrT]
       mntCfgsT     =  writeConfig(CoreConfig.mountings, cfgRef, cfgPath)
       coreApi      <- CoreEff.interpreter[CoreConfig](mntCfgsT).liftM[MainErrT]
-      ephemeralApi =  CfgsErrsIO.toMainTask(MntCfgsIO.ephemeral) compose coreApi
+      ephemeralApi =  foldMapNT(CfgsErrsIO.toMainTask(MntCfgsIO.ephemeral)) compose coreApi
       _            <- (mountAll[CoreEff](config.mountings) foldMap ephemeralApi).flatMapF(_.point[Task])
 
-      durableApi   =  CfgsErrsIO.toMainTask(MntCfgsIO.durable[CoreConfig](mntCfgsT)) compose coreApi
+      durableApi   =  foldMapNT(CfgsErrsIO.toMainTask(MntCfgsIO.durable[CoreConfig](mntCfgsT)))
+                        .compose(coreApi)
 
       r            <- EitherT.right(repl(mt compose (durableApi compose injectNT[MountingFileSystem, CoreEff])))
       _            <- EitherT.right(driver(r))

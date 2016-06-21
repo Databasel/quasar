@@ -17,7 +17,7 @@
 package quasar.physical.mongodb
 
 import quasar.Predef._
-import quasar.{EnvErrF, EnvironmentError}
+import quasar.{EnvErr, EnvironmentError}
 import quasar.config._
 import quasar.effect.Failure
 import quasar.fp.free
@@ -42,12 +42,12 @@ object util {
     * NB: The connection is tested during creation and creation will fail if
     *     connecting to the server times out.
     */
-  def createAsyncMongoClient[S[_]: Functor](
+  def createAsyncMongoClient[S[_]](
     uri: ConnectionUri
   )(implicit
     S0: Task :<: S,
-    S1: EnvErrF :<: S,
-    S2: CfgErrF :<: S
+    S1: EnvErr :<: S,
+    S2: CfgErr :<: S
   ): Free[S, AMongoClient] = {
     type M[A] = Free[S, A]
     val cfgErr = Failure.Ops[ConfigError, S]
@@ -73,7 +73,7 @@ object util {
       */
     def testConnection(aclient: AMongoClient): Task[Unit] =
       MongoDbIO.serverVersion.run(aclient)
-        .unsafePerformTimed(defaultTimeoutMillis.toLong)(Strategy.DefaultTimeoutScheduler)
+        .timed(defaultTimeoutMillis.toLong)(Strategy.DefaultTimeoutScheduler)
         .attempt flatMap {
           case -\/(tout: TimeoutException) =>
             val hosts = aclient.getSettings.getClusterSettings.getHosts.toString
@@ -156,7 +156,7 @@ object util {
     Task.delay { Logger.getLogger("org.mongodb").setLevel(Level.WARNING) }
   }
 
-  private def liftAndHandle[S[_]: Functor, A]
+  private def liftAndHandle[S[_], A]
               (ta: Task[A])(f: Throwable => Free[S, A])
               (implicit S0: Task :<: S)
               : Free[S, A] =

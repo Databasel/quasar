@@ -32,24 +32,24 @@ object ViewMounter {
   import MountingError._, MountConfig._
 
   /** Retrieve view file paths */
-  def viewPaths[S[_]: Functor]
-    (implicit S: MountConfigsF :<: S)
+  def viewPaths[S[_]]
+    (implicit S: MountConfigs :<: S)
     : Free[S, Vector[AFile]] =
     mntCfgs[S].keys.flatMap(_.foldMap(refineType(_).fold(
       κ(Vector.empty[AFile].point[Free[S, ?]]),
       f => lookup[S](f).fold(κ(Vector(f)), Vector.empty))))
 
   /** Lookup mounted view */
-  def lookup[S[_]: Functor]
+  def lookup[S[_]]
     (loc: AFile)
-    (implicit S: MountConfigsF :<: S)
+    (implicit S: MountConfigs :<: S)
     : OptionT[Free[S, ?], (Fix[Sql], Variables)] =
     mntCfgs[S].get(loc).flatMap(mc => OptionT.optionT[Free[S, ?]](Free.point(viewConfig.getOption(mc))))
 
   /** Attempts to mount a view at the given location. */
-  def mount[S[_]: Functor]
+  def mount[S[_]]
     (loc: AFile, query: Fix[Sql], vars: Variables)
-    (implicit S: MountConfigsF :<: S)
+    (implicit S: MountConfigs :<: S)
     : Free[S, MountingError \/ Unit] = {
     val vc = viewConfig(query, vars)
     queryPlan(query, vars, 0L, None).run.value.fold(
@@ -58,23 +58,23 @@ object ViewMounter {
   }
 
   /** Attempts to move a view at the given location. */
-  def move[S[_]: Functor]
+  def move[S[_]]
     (srcLoc: AFile, dstLoc: AFile)
-    (implicit S: MountConfigsF :<: S)
+    (implicit S: MountConfigs :<: S)
     : Free[S, Unit] =
     mntCfgs[S].move(srcLoc, dstLoc)
 
   /** Unmounts the view at the given location. */
-  def unmount[S[_]: Functor]
+  def unmount[S[_]]
     (loc: AFile)
-    (implicit S0: MountConfigsF :<: S)
+    (implicit S0: MountConfigs :<: S)
     : Free[S, Unit] =
     lookup[S](loc).flatMapF(κ(mntCfgs[S].delete(loc))).run.void
 
   /** Resolve view references within a query. */
-  def rewrite[S[_]: Functor]
+  def rewrite[S[_]]
     (lp: Fix[LogicalPlan])
-    (implicit S0: MountConfigsF :<: S)
+    (implicit S0: MountConfigs :<: S)
     : SemanticErrsT[Free[S, ?], Fix[LogicalPlan]] = {
 
     implicit val m = EitherT.eitherTMonad[Free[S, ?], SemanticErrors]
@@ -109,15 +109,15 @@ object ViewMounter {
   }
 
   /** Enumerate view files and view ancestor directories at a particular location. */
-  def ls[S[_]: Functor]
+  def ls[S[_]]
     (dir: ADir)
-    (implicit S0: MountConfigsF :<: S)
+    (implicit S0: MountConfigs :<: S)
     : Free[S, Set[PathSegment]] =
     viewPaths[S].map(_.foldMap(_.relativeTo(dir).flatMap(firstSegmentName).toSet))
 
   ////
 
-  private def mntCfgs[S[_]: Functor](implicit S: MountConfigsF :<: S) = KeyValueStore.Ops[APath, MountConfig, S]
+  private def mntCfgs[S[_]](implicit S: MountConfigs :<: S) = KeyValueStore.Ops[APath, MountConfig, S]
 
   /** Rewrite relative paths to be based on the given dir. */
   private def absolutize(lp: Fix[LogicalPlan], dir: ADir): Fix[LogicalPlan] =

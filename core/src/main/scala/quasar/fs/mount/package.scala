@@ -24,23 +24,21 @@ import quasar.fp.free, free._
 import scala.collection.immutable.Vector
 
 import monocle.Lens
-import scalaz.{Lens => _, :+: => _, _}
+import scalaz.{Lens => _, _}
 import scalaz.concurrent.Task
 
 package object mount {
   type MntErrT[F[_], A] = EitherT[F, MountingError, A]
-  type MountingF[A] = Coyoneda[Mounting, A]
 
-  type MountConfigs[A]  = KeyValueStore[APath, MountConfig, A]
-  type MountConfigsF[A] = Coyoneda[MountConfigs, A]
+  type MountConfigs[A] = KeyValueStore[APath, MountConfig, A]
 
-  type MountingFileSystem[A] = (MountingF :+: FileSystem)#λ[A]
+  type MountingFileSystem[A] = Coproduct[Mounting, FileSystem, A]
 
-  def interpretMountingFileSystem[M[_]: Functor](
+  def interpretMountingFileSystem[M[_]](
     m: Mounting ~> M,
     fs: FileSystem ~> M
   ): MountingFileSystem ~> M =
-    Coyoneda.liftTF(m) :+: fs
+    m :+: fs
 
   //-- Views --
 
@@ -55,11 +53,9 @@ package object mount {
 
   type ViewState[A] = KeyValueStore[ReadFile.ReadHandle, ResultSet, A]
 
-  type ViewStateF[A] = Coyoneda[ViewState, A]
-
   object ViewState {
-    def Ops[S[_]: Functor](
-      implicit S: ViewStateF :<: S
+    def Ops[S[_]](
+      implicit S: ViewState :<: S
     ): KeyValueStore.Ops[ReadFile.ReadHandle, ResultSet, S] =
       KeyValueStore.Ops[ReadFile.ReadHandle, ResultSet, S]
 
@@ -70,14 +66,15 @@ package object mount {
       KeyValueStore.toState[State[S,?]](l)
   }
 
-  type ViewFileSystem[A] =
-    (MountConfigsF :+: (ViewStateF :+: (MonotonicSeqF :+: FileSystem)#λ)#λ)#λ[A]
+  type ViewFileSystem0[A] = Coproduct[MonotonicSeq, FileSystem, A]
+  type ViewFileSystem1[A] = Coproduct[ViewState, ViewFileSystem0, A]
+  type ViewFileSystem[A]  = Coproduct[MountConfigs, ViewFileSystem1, A]
 
-  def interpretViewFileSystem[M[_]: Functor](
+  def interpretViewFileSystem[M[_]](
     mc: MountConfigs ~> M,
     v: ViewState ~> M,
     s: MonotonicSeq ~> M,
     fs: FileSystem ~> M
   ): ViewFileSystem ~> M =
-    Coyoneda.liftTF(mc) :+: Coyoneda.liftTF(v) :+: Coyoneda.liftTF(s) :+: fs
+    mc :+: v :+: s :+: fs
 }

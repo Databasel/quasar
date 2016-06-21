@@ -107,10 +107,8 @@ object ManageFile {
   final case class TempFile(near: APath)
     extends ManageFile[FileSystemError \/ AFile]
 
-  // TODO{scalaz}: Refactor, dropping Coyoneda and Functor constraint once we
-  //               update to scalaz-7.2
   @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
-  final class Ops[S[_]](implicit S0: Functor[S], S1: ManageFileF :<: S)
+  final class Ops[S[_]](implicit S: ManageFile :<: S)
     extends LiftedOps[ManageFile, S] {
 
     type M[A] = FileSystemErrT[F, A]
@@ -147,7 +145,7 @@ object ManageFile {
   }
 
   object Ops {
-    implicit def apply[S[_]](implicit S0: Functor[S], S1: ManageFileF :<: S): Ops[S] =
+    implicit def apply[S[_]](implicit S: ManageFile :<: S): Ops[S] =
       new Ops[S]
   }
 

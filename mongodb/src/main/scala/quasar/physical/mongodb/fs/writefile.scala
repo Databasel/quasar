@@ -63,11 +63,11 @@ object writefile {
   }
 
   /** Run [[MongoWrite]] using the given `MongoClient`. */
-  def run[S[_]: Functor](
+  def run[S[_]](
     client: MongoClient
   )(implicit
     S0: Task :<: S,
-    S1: MongoErrF :<: S
+    S1: MongoErr :<: S
   ): Task[MongoWrite ~> Free[S, ?]] =
     TaskRef[WriteState]((0, Map.empty)) map { ref =>
       new (MongoWrite ~> Free[S, ?]) {

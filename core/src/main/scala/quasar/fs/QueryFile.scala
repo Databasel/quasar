@@ -24,6 +24,7 @@ import quasar.fp._
 import matryoshka._
 import pathy.Path._
 import scalaz._, Scalaz._
+import scalaz.iteratee._
 import scalaz.stream.Process
 
 sealed trait QueryFile[A]
@@ -102,7 +103,7 @@ object QueryFile {
   import EitherT.eitherTMonad
 
   @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
-  final class Ops[S[_]](implicit S0: Functor[S], S1: QueryFileF :<: S)
+  final class Ops[S[_]](implicit S: QueryFile :<: S)
     extends LiftedOps[QueryFile, S] {
 
     type M[A] = FileSystemErrT[F, A]
@@ -121,13 +122,34 @@ object QueryFile {
     def execute(plan: Fix[LogicalPlan], out: AFile): ExecM[AFile] =
       EitherT(WriterT(lift(ExecutePlan(plan, out))): G[FileSystemError \/ AFile])
 
+    /** Returns an enumerator of data resulting from evaluating the given
+      * [[LogicalPlan]].
+      */
+    def enumerate(plan: Fix[LogicalPlan]): EnumeratorT[Data, ExecM] = {
+      import Iteratee._
+
+      val enumHandle: EnumeratorT[ResultHandle, ExecM] =
+        unsafe.eval(plan).liftM[EnumT]
+
+      def enumData(h: ResultHandle): EnumeratorT[Vector[Data], ExecM] =
+        new EnumeratorT[Vector[Data], ExecM] {
+          def apply[A] = s => s mapContOr (k =>
+            iterateeT(hoistToExec(unsafe.more(h)) flatMap { data =>
+              if (data.isEmpty)
+                toExec(unsafe.close(h)) *> k(emptyInput).value
+              else
+                (k(elInput(data)) >>== apply[A]).value
+            }),
+            iterateeT(toExec(unsafe.close(h) as s)))
+        }
+
+      enumHandle flatMap enumData flatMap (enumIndexedSeq[Data, ExecM](_))
+    }
+
     /** Returns the stream of data resulting from evaluating the given
       * [[LogicalPlan]].
       */
     def evaluate(plan: Fix[LogicalPlan]): Process[ExecM, Data] = {
-      val f: M ~> ExecM =
-        Hoist[FileSystemErrT].hoist[F, G](liftMT[F, PhaseResultT])
-
       def moreUntilEmpty(h: ResultHandle): Process[M, Data] =
         Process.await(unsafe.more(h): M[Vector[Data]]) { data =>
           if (data.isEmpty)
@@ -140,7 +162,7 @@ object QueryFile {
         toExec(unsafe.close(h))
 
       Process.bracket(unsafe.eval(plan))(h => Process.eval_(close(h))) { h =>
-        moreUntilEmpty(h).translate(f)
+        moreUntilEmpty(h).translate(hoistToExec)
       }
     }
 
@@ -184,10 +206,15 @@ object QueryFile {
       */
     def fileExistsM(file: AFile): M[Boolean] =
       fileExists(file).liftM[FileSystemErrT]
+
+    ////
+
+    private val hoistToExec: M ~> ExecM =
+      Hoist[FileSystemErrT].hoist[F, G](liftMT[F, PhaseResultT])
   }
 
   object Ops {
-    implicit def apply[S[_]](implicit S0: Functor[S], S1: QueryFileF :<: S): Ops[S] =
+    implicit def apply[S[_]](implicit S: QueryFile :<: S): Ops[S] =
       new Ops[S]
   }
 
@@ -195,7 +222,7 @@ object QueryFile {
     * when using these.
     */
   @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
-  final class Unsafe[S[_]](implicit S0: Functor[S], S1: QueryFileF :<: S)
+  final class Unsafe[S[_]](implicit S: QueryFile :<: S)
     extends LiftedOps[QueryFile, S] {
 
     val transforms = Transforms[F]
@@ -224,7 +251,7 @@ object QueryFile {
   }
 
   object Unsafe {
-    implicit def apply[S[_]](implicit S0: Functor[S], S1: QueryFileF :<: S): Unsafe[S] =
+    implicit def apply[S[_]](implicit S: QueryFile :<: S): Unsafe[S] =
       new Unsafe[S]
   }
 

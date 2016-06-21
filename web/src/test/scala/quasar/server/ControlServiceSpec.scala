@@ -53,7 +53,7 @@ class ControlServiceSpec extends mutable.Specification {
         b <- afterRestart
         _ <- shutdown
         _ <- others2.run
-      } yield b).unsafePerformTimed(timeoutMillis)(DefaultTimeoutScheduler).onFinish(_ => shutdown)
+      } yield b).timed(timeoutMillis)(DefaultTimeoutScheduler).onFinish(_ => shutdown)
     } yield b).unsafePerformSyncFor(timeoutMillis)
   }
 

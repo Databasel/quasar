@@ -57,11 +57,11 @@ object readfile {
   }
 
   /** Run [[MongoRead]], using the given `MongoClient`. */
-  def run[S[_]: Functor](
+  def run[S[_]](
     client: MongoClient
   )(implicit
     S0: Task :<: S,
-    S1: MongoErrF :<: S
+    S1: MongoErr :<: S
   ): Task[MongoRead ~> Free[S, ?]] =
     TaskRef[ReadState]((0, Map.empty)) map { ref =>
       new (MongoRead ~> Free[S, ?]) {

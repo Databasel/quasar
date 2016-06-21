@@ -43,4 +43,9 @@ object console {
       _.equalsIgnoreCase("true"),
       false)
   }
+
+  /** Read the value of an environment variable. */
+  def readEnv(name: String): OptionT[Task, String] =
+    Task.delay(System.getenv).liftM[OptionT]
+      .flatMap(env => OptionT(Task.delay(Option(env.get(name)))))
 }

@@ -23,6 +23,7 @@ import java.lang.NumberFormatException
 
 import monocle.{Lens, Prism}
 import scalaz.{Lens => _, _}, Liskov._, Scalaz._
+import scalaz.iteratee.EnumeratorT
 import scalaz.stream._
 import simulacrum.typeclass
 
@@ -369,6 +370,9 @@ package object fp
     with PrismInstances
     with SKI
     with StringOps {
+
+  type EnumT[F[_], A] = EnumeratorT[A, F]
+
   sealed trait Polymorphic[F[_], TC[_]] {
     def apply[A: TC]: TC[F[A]]
   }
@@ -437,30 +441,6 @@ package object fp
     new (Id ~> F) {
       def apply[A](a: A) = Applicative[F].point(a)
     }
-
-  /** `Free#foldMap` as a natural transformation */
-  def hoistFree[S[_]: Functor, M[_]: Monad](f: S ~> M): Free[S, ?] ~> M =
-    new (Free[S, ?] ~> M) {
-      def apply[A](fa: Free[S, A]) = fa foldMap f
-    }
-
-  /** `Free#liftF` as a natural transformation */
-  def liftFT[S[_]: Functor]: S ~> Free[S, ?] =
-    new (S ~> Free[S, ?]) {
-      def apply[A](s: S[A]) = Free.liftF(s)
-    }
-
-  /** `Inject#inj` as a natural transformation. */
-  def injectNT[F[_], G[_]](implicit I: F :<: G): F ~> G =
-    new (F ~> G) {
-      def apply[A](fa: F[A]) = I inj fa
-    }
-
-  /** Convenience transformation to inject into a coproduct and lift into
-    * `Free`.
-    */
-  def injectFT[F[_], S[_]: Functor](implicit S: F :<: S): F ~> Free[S, ?] =
-    liftFT[S] compose injectNT[F, S]
 
   def evalNT[F[_]: Monad, S](initial: S): StateT[F, S, ?] ~> F =
     new (StateT[F, S, ?] ~> F) {

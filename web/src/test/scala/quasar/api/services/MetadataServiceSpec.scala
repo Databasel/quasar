@@ -37,12 +37,12 @@ import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 import pathy.Path._
 import pathy.scalacheck.PathyArbitrary._
-import scalaz.{Lens => _, :+: => _, _}
+import scalaz.{Lens => _, _}
 import scalaz.concurrent.Task
 
 object MetadataFixture {
 
-  type MetadataEff[A] = Coproduct[QueryFileF, MountingF, A]
+  type MetadataEff[A] = Coproduct[QueryFile, Mounting, A]
 
   def runQuery(mem: InMemState): QueryFile ~> Task =
     new (QueryFile ~> Task) {
@@ -53,16 +53,15 @@ object MetadataFixture {
   def runMount(mnts: Map[APath, MountConfig]): Mounting ~> Task =
     new (Mounting ~> Task) {
       type F[A] = State[Map[APath, MountConfig], A]
-      val mntr = Mounter.trivial[MountConfigsF]
+      val mntr = Mounter.trivial[MountConfigs]
       val kvf = KeyValueStore.toState[F](Lens.id[Map[APath, MountConfig]])
       def apply[A](ma: Mounting[A]) =
-        Task.now(mntr(ma).foldMap(Coyoneda.liftTF[MountConfigs, F](kvf)).eval(mnts))
+        Task.now(mntr(ma).foldMap(kvf).eval(mnts))
     }
 
   def service(mem: InMemState, mnts: Map[APath, MountConfig]): HttpService =
     metadata.service[MetadataEff].toHttpService(
-      liftMT[Task, ResponseT].compose[MetadataEff](
-        Coyoneda.liftTF(runQuery(mem)) :+: Coyoneda.liftTF(runMount(mnts))))
+      liftMT[Task, ResponseT] compose (runQuery(mem) :+: runMount(mnts)))
 }
 
 class MetadataServiceSpec extends Specification with ScalaCheck with FileSystemFixture with Http4s with PathUtils {

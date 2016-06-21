@@ -22,13 +22,13 @@ import quasar.fp._, free._
 import quasar.fs.APath
 
 import pathy.Path._
-import scalaz.{:+: => _, _}, Scalaz._
+import scalaz._, Scalaz._
 import scalaz.concurrent.Task
 
-class MounterSpec extends MountingSpec[MountingF] {
+class MounterSpec extends MountingSpec[Mounting] {
   import MountConfig._, MountingError._, MountRequest._
 
-  type MEff[A]  = Coproduct[Task, MountConfigsF, A]
+  type MEff[A] = Coproduct[Task, MountConfigs, A]
 
   val invalidUri = ConnectionUri(uriA.value + "INVALID")
   val invalidCfg = fileSystemConfig(dbType, invalidUri)
@@ -45,15 +45,13 @@ class MounterSpec extends MountingSpec[MountingF] {
     val mm = Mounter[Task, MEff](doMount.andThen(_.point[Task]), κ(Task.now(())))
     val cfgRef = TaskRef(Map.empty[APath, MountConfig]).unsafePerformSync
 
-    val interpMnts: MountConfigsF ~> Task =
-      Coyoneda.liftTF[MountConfigs, Task](KeyValueStore.fromTaskRef(cfgRef))
+    val interpMnts: MountConfigs ~> Task =
+      KeyValueStore.fromTaskRef(cfgRef)
 
-    val interpEff: MEff ~> Task = NaturalTransformation.refl[Task] :+: interpMnts
+    val interpEff: MEff ~> Task =
+      NaturalTransformation.refl[Task] :+: interpMnts
 
-    val interp0: Mounting ~> Task =
-      free.foldMapNT[MEff, Task](interpEff).compose(mm)
-
-    Coyoneda.liftTF(interp0)
+    free.foldMapNT(interpEff) compose mm
   }
 
   "Handling mounts" should {

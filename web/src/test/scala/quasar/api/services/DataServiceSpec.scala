@@ -40,7 +40,7 @@ import org.specs2.scalaz.ScalazMatchers._
 import org.specs2.ScalaCheck
 import pathy.Path, Path._
 import pathy.scalacheck.PathyArbitrary._
-import scalaz.{Failure => _, :+: => _, _}, Scalaz._
+import scalaz.{Failure => _, _}, Scalaz._
 import scalaz.concurrent.Task
 import scalaz.scalacheck.ScalazArbitrary._
 import scalaz.stream.Process
@@ -57,13 +57,13 @@ class DataServiceSpec extends Specification with ScalaCheck with FileSystemFixtu
   import FileSystemFixture.{ReadWriteT, ReadWrites, amendWrites}
   import PathError.{pathExists, pathNotFound}
 
-  type Eff[A] = (Task :+: (FileSystemFailureF :+: FileSystem)#λ)#λ[A]
+  type Eff0[A] = Coproduct[FileSystemFailure, FileSystem, A]
+  type Eff[A]  = Coproduct[Task, Eff0, A]
   type EffM[A] = Free[Eff, A]
 
   def effRespOr(fs: FileSystem ~> Task): Eff ~> ResponseOr =
-    liftMT[Task, ResponseT]                         :+:
-    Coyoneda.liftTF[FileSystemFailure, ResponseOr](
-      failureResponseOr[FileSystemError])           :+:
+    liftMT[Task, ResponseT]              :+:
+    failureResponseOr[FileSystemError]   :+:
     (liftMT[Task, ResponseT] compose fs)
 
   def service(mem: InMemState): HttpService =
@@ -82,15 +82,13 @@ class DataServiceSpec extends Specification with ScalaCheck with FileSystemFixtu
 
   def serviceErrs(mem: InMemState, writeErrors: FileSystemError*): HttpService = {
     type RW[A] = ReadWriteT[ResponseOr, A]
-    implicit val injWF = Inject[WriteFileF, Eff]
     HttpService.lift(req => runFs(mem) flatMap { fs =>
       val fs0: Eff ~> ResponseOr = effRespOr(fs)
-      val g: WriteFile ~> ResponseOr = free.restrict[ResponseOr, WriteFile, Eff](fs0)
-      val wf: WriteFileF ~> RW = Coyoneda.liftTF[WriteFile, RW](amendWrites[ResponseOr](g))
+      val g: WriteFile ~> RW = amendWrites(free.restrict[ResponseOr, WriteFile, Eff](fs0))
       val f: Eff ~> RW = liftMT[ResponseOr, ReadWriteT] compose fs0
 
       val fsErrs: Eff ~> ResponseOr =
-        evalNT[ResponseOr, ReadWrites]((Nil, List(writeErrors.toVector))) compose free.transformIn(wf, f)
+        evalNT[ResponseOr, ReadWrites]((Nil, List(writeErrors.toVector))) compose free.transformIn(g, f)
 
       data.service[Eff].toHttpService(fsErrs).apply(req)
     })

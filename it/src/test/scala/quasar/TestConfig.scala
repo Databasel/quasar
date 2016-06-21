@@ -20,8 +20,6 @@ import quasar.Predef._
 import quasar.fs._
 import quasar.fs.mount.MountConfig
 
-import java.lang.System
-
 import argonaut._
 import pathy.Path._
 import scalaz._, Scalaz._
@@ -116,17 +114,12 @@ object TestConfig {
     }
   }
 
-  /** Read the value of an environment variable. */
-  def readEnv(name: String): OptionT[Task, String] =
-    Task.delay(System.getenv).liftM[OptionT]
-      .flatMap(env => OptionT(Task.delay(Option(env.get(name)))))
-
   /** Load backend config from environment variable.
     *
     * Fails if it cannot parse the config and returns None if there is no config.
     */
   def loadConfig(envName: String): OptionT[Task, MountConfig] =
-    readEnv(envName).flatMapF(value =>
+    console.readEnv(envName).flatMapF(value =>
       Parse.decodeEither[MountConfig](value).fold(
         e => fail("Failed to parse $" + envName + ": " + e),
         _.point[Task]))
@@ -149,7 +142,7 @@ object TestConfig {
     * environment and return the [[DefaultTestPrefix]] if nothing is provided.
     */
   def testDataPrefix: Task[ADir] =
-    readEnv(TestPathPrefixEnvName) flatMap { s =>
+    console.readEnv(TestPathPrefixEnvName) flatMap { s =>
       posixCodec.parseAbsDir(s).cata(
         d => OptionT(sandbox(rootDir, d).map(rootDir </> _).point[Task]),
         fail[ADir](s"Test data dir must be an absolute dir, got: $s").liftM[OptionT])

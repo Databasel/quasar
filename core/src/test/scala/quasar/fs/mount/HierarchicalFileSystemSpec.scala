@@ -29,14 +29,14 @@ import matryoshka.Fix
 import monocle.Lens
 import org.specs2.mutable
 import pathy.Path._
-import scalaz.{Lens => _, Failure => _, :+: => _, _}, Id.Id
+import scalaz.{Lens => _, Failure => _, _}, Id.Id
 import scalaz.syntax.either._
 import scalaz.std.list._
 import shapeless.{Data => _, Coproduct => _, _}
 
 class HierarchicalFileSystemSpec extends mutable.Specification with FileSystemFixture {
   import InMemory.InMemState, FileSystemError._, PathError._
-  import hierarchical.{MountedResultH, MountedResultHF}
+  import hierarchical.MountedResultH
   import ManageFile.MoveSemantics, QueryFile.ResultHandle, LogicalPlan._
 
   val transforms = QueryFile.Transforms[F]
@@ -46,8 +46,8 @@ class HierarchicalFileSystemSpec extends mutable.Specification with FileSystemFi
   type MountedFs[A] = State[MountedState, A]
   type MountedFsE[E, A] = EitherT[MountedFs, E, A]
 
-  type HEff0[A] = Coproduct[MountedResultHF, MountedFs, A]
-  type HEff[A]  = Coproduct[MonotonicSeqF, HEff0, A]
+  type HEff0[A] = Coproduct[MountedResultH, MountedFs, A]
+  type HEff[A]  = Coproduct[MonotonicSeq, HEff0, A]
   type HEffM[A] = Free[HEff, A]
 
   type RHandles = Map[ResultHandle, (ADir, ResultHandle)]
@@ -73,11 +73,11 @@ class HierarchicalFileSystemSpec extends mutable.Specification with FileSystemFi
   val cMem: Lens[MountedState, InMemState]  = Lens((_: MountedState).c)(s => ms => ms.copy(c = s))
 
   val interpHEff: HEff ~> MountedFs = {
-    val seqNT: MonotonicSeqF ~> MountedFs =
-      Coyoneda.liftTF[MonotonicSeq, MountedFs](MonotonicSeq.toState[MountedFs](seq))
+    val seqNT: MonotonicSeq ~> MountedFs =
+      MonotonicSeq.toState[MountedFs](seq)
 
-    val handlesNT: MountedResultHF ~> MountedFs =
-      Coyoneda.liftTF[MountedResultH, MountedFs](KeyValueStore.toState[MountedFs](handles))
+    val handlesNT: MountedResultH ~> MountedFs =
+      KeyValueStore.toState[MountedFs](handles)
 
     seqNT :+: handlesNT :+: NaturalTransformation.refl
   }
@@ -90,12 +90,12 @@ class HierarchicalFileSystemSpec extends mutable.Specification with FileSystemFi
     )).toOption.get)
 
   val runMntd: F ~> MountedFs =
-    hoistFree(hoistFree(interpHEff).compose[FileSystem](interpretMnted))
+    foldMapNT(foldMapNT(interpHEff).compose[FileSystem](interpretMnted))
 
   val runEmpty: F ~> MountedFs = {
     val interpEmpty: FileSystem ~> HEffM =
       hierarchical.fileSystem[MountedFs, HEff](Mounts.empty)
-    hoistFree(hoistFree(interpHEff).compose[FileSystem](interpEmpty))
+    foldMapNT(foldMapNT(interpHEff) compose interpEmpty)
   }
 
   // NB: Defining these here for a reuse, but also because using `beLike`

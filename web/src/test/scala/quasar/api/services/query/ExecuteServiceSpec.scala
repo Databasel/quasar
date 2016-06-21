@@ -81,8 +81,8 @@ class ExecuteServiceSpec extends Specification with FileSystemFixture with Scala
   }
 
   def failingExecPlan[F[_]: Applicative](msg: String, f: FileSystem ~> F): FileSystem ~> F = {
-    val qf: QueryFileF ~> F =
-      f compose injectNT[QueryFileF, FileSystem]
+    val qf: QueryFile ~> F =
+      f compose free.injectNT[QueryFile, FileSystem]
 
     val failingQf: QueryFile ~> F = new (QueryFile ~> F) {
       import QueryFile._
@@ -91,12 +91,11 @@ class ExecuteServiceSpec extends Specification with FileSystemFixture with Scala
           (Vector[PhaseResult](), executionFailed_(lp, msg).left[AFile]).point[F]
 
         case otherwise =>
-          qf(Coyoneda.lift(otherwise))
+          qf(otherwise)
       }
     }
 
-    free.transformIn[QueryFileF, FileSystem, F](
-      Coyoneda.liftTF(failingQf), f)
+    free.transformIn(failingQf, f)
   }
 
   def post[A: EntityDecoder](

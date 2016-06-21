@@ -19,7 +19,7 @@ package quasar
 import quasar.effect.Failure
 
 import pathy.Path.{File, Dir, Sandboxed}
-import scalaz.{Coyoneda, EitherT}
+import scalaz.EitherT
 import scalaz.concurrent.Task
 
 package object config {
@@ -27,7 +27,6 @@ package object config {
   type FsDir  = FsPath[Dir, Sandboxed]
 
   type CfgErr[A]  = Failure[ConfigError, A]
-  type CfgErrF[A] = Coyoneda[CfgErr, A]
 
   type CfgErrT[F[_], A] = EitherT[F, ConfigError, A]
   type CfgTask[A]       = CfgErrT[Task, A]

@@ -63,7 +63,7 @@ object metadata {
       jdecode3L(FsNode.apply)("name", "type", "mount")
   }
 
-  def service[S[_]: Functor](implicit Q: QueryFile.Ops[S], M: Mounting.Ops[S]): QHttpService[S] = {
+  def service[S[_]](implicit Q: QueryFile.Ops[S], M: Mounting.Ops[S]): QHttpService[S] = {
 
     def mkNode(parent: ADir, name: PathSegment): Q.M[FsNode] =
       M.lookupType(parent </> name.fold(dir1, file1)).run

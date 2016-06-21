@@ -28,7 +28,7 @@ object Timing {
   final case object Nanos extends Timing[Long]
 
   @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
-  final class Ops[S[_]: Functor](implicit S: TimingF :<: S)
+  final class Ops[S[_]](implicit S: Timing :<: S)
     extends LiftedOps[Timing, S] {
 
     private val lowLevel = LowLevel[S]
@@ -48,13 +48,14 @@ object Timing {
       } yield (a, Duration.ofNanos(end - start))
     }
   }
+
   object Ops {
-    implicit def apply[S[_]: Functor](implicit S: TimingF :<: S): Ops[S] =
+    implicit def apply[S[_]](implicit S: Timing :<: S): Ops[S] =
       new Ops[S]
   }
 
   @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
-  final class LowLevel[S[_]: Functor](implicit S: TimingF :<: S)
+  final class LowLevel[S[_]](implicit S: Timing :<: S)
     extends LiftedOps[Timing, S] {
 
     /** Raw nanoseconds value; note that these values are only meaningful when
@@ -63,8 +64,9 @@ object Timing {
     val nanos: F[Long] =
       lift(Nanos)
   }
+
   object LowLevel {
-    implicit def apply[S[_]: Functor](implicit S: TimingF :<: S): LowLevel[S] =
+    implicit def apply[S[_]](implicit S: Timing :<: S): LowLevel[S] =
       new LowLevel[S]
   }
 

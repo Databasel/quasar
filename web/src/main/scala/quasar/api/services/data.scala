@@ -39,13 +39,14 @@ import scodec.bits.ByteVector
 object data {
   import ManageFile.{MoveSemantics, MoveScenario}
 
-  def service[S[_]: Functor](implicit
+  def service[S[_]](
+    implicit
     R: ReadFile.Ops[S],
     W: WriteFile.Ops[S],
     M: ManageFile.Ops[S],
     Q: QueryFile.Ops[S],
     S0: Task :<: S,
-    S1: FileSystemFailureF :<: S
+    S1: FileSystemFailure :<: S
   ): QHttpService[S] = QHttpService {
 
     case req @ GET -> AsPath(path) :? Offset(offsetParam) +& Limit(limitParam) =>
@@ -76,7 +77,7 @@ object data {
 
   ////
 
-  private def download[S[_]: Functor](
+  private def download[S[_]](
     format: MessageFormat,
     path: APath,
     offset: Natural,
@@ -84,7 +85,7 @@ object data {
   )(implicit
     R: ReadFile.Ops[S],
     Q: QueryFile.Ops[S],
-    S0: FileSystemFailureF :<: S,
+    S0: FileSystemFailure :<: S,
     S1: Task :<: S
   ): QResponse[S] =
     refineType(path).fold(
@@ -129,7 +130,7 @@ object data {
           MoveScenario.fileToFile(srcFile, _)))
 
   // TODO: Streaming
-  private def upload[S[_]: Functor](
+  private def upload[S[_]](
     req: Request,
     by: Vector[Data] => FileSystemErrT[Free[S,?], Vector[FileSystemError]]
   )(implicit S0: Task :<: S): Free[S, QResponse[S]] = {
@@ -159,7 +160,7 @@ object data {
         errorsResponse(errors, by(data))
       }
 
-      injectFT[Task,S].apply(
+      free.injectFT[Task,S].apply(
         MessageFormat.decoder.decode(req,true)
           .leftMap(_.toResponse[S].point[FreeS])
           .flatMap(dataStream => EitherT.right(dataStream.runLog.map(write)))
@@ -167,7 +168,7 @@ object data {
       ).flatMap(ι)
   }
 
-  private def zippedContents[S[_]: Functor](
+  private def zippedContents[S[_]](
     dir: AbsDir[Sandboxed],
     format: MessageFormat,
     offset: Natural,

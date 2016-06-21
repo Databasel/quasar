@@ -5,7 +5,7 @@ import scala.collection.Seq
 import sbt._, Keys._
 
 object Dependencies {
-  private val scalazVersion  = "7.2.2"
+  private val scalazVersion  = "7.2.3"
   private val slcVersion     = "0.4"
   private val monocleVersion = "1.2.1"
   private val pathyVersion   = "0.2.0"
@@ -18,6 +18,7 @@ object Dependencies {
   val core = Seq(
     "org.scalaz"        %% "scalaz-core"               % scalazVersion            % "compile, test" force(),
     "org.scalaz"        %% "scalaz-concurrent"         % scalazVersion            % "compile, test",
+    "org.scalaz"        %% "scalaz-iteratee"           % scalazVersion            % "compile, test",
     "org.scalaz.stream" %% "scalaz-stream"             % "0.8.1a"                 % "compile, test",
     "com.github.julien-truffaut" %% "monocle-core"     % monocleVersion           % "compile, test",
     "com.github.julien-truffaut" %% "monocle-generic"  % monocleVersion           % "compile, test",

@@ -27,7 +27,7 @@ object ConsoleIO {
   final case class PrintLn(message: String) extends ConsoleIO[Unit]
 
   @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
-  final class Ops[S[_]: Functor](implicit S: ConsoleIOF :<: S)
+  final class Ops[S[_]](implicit S: ConsoleIO :<: S)
     extends LiftedOps[ConsoleIO, S] {
 
     def println(message: String): F[Unit] =
@@ -35,7 +35,7 @@ object ConsoleIO {
   }
 
   object Ops {
-    implicit def apply[S[_]: Functor](implicit S: ConsoleIOF :<: S): Ops[S] =
+    implicit def apply[S[_]](implicit S: ConsoleIO :<: S): Ops[S] =
       new Ops[S]
   }
 }

@@ -29,11 +29,11 @@ import scalaz.stream.Process
   * @tparam F The type of the `Functor` that represents the algebra to be interpreted
   * @tparam M The `Monad` into which to translate the `Free` Algebra
   */
-class Interpreter[F[_]: Functor, M[_]: Monad](val interpretTerm: F ~> M) {
+class Interpreter[F[_], M[_]: Monad](val interpretTerm: F ~> M) {
   type Program[A] = Free[F,A]
 
   def interpret: Program ~> M =
-    hoistFree(interpretTerm)
+    foldMapNT(interpretTerm)
 
   def interpretT[T[_[_],_]: Hoist]: T[Program,?] ~> T[M,?] =
     Hoist[T].hoist[Program,M](interpret)
@@ -75,7 +75,7 @@ class Interpreter[F[_]: Functor, M[_]: Monad](val interpretTerm: F ~> M) {
   */
 // https://github.com/puffnfresh/wartremover/issues/149
 @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
-class SpecializedInterpreter[F[_]: Functor, M[_]: Monad](interpretTerm: F ~> M) extends Interpreter(interpretTerm) {
+class SpecializedInterpreter[F[_], M[_]: Monad](interpretTerm: F ~> M) extends Interpreter(interpretTerm) {
   def runLog[E,A](p: Process[EitherT[Program,E,?],A])(implicit catchable: Catchable[M]): EitherT[M,E,Vector[A]] = {
     type T[Program[_],A] = EitherT[Program,E,A]
     runLogT[T,A](p)

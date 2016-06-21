@@ -64,7 +64,7 @@ object Mounting {
   }
 
   @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
-  final class Ops[S[_]](implicit S0: Functor[S], S1: MountingF :<: S)
+  final class Ops[S[_]](implicit S: Mounting :<: S)
     extends LiftedOps[Mounting, S] {
 
     import MountConfig._
@@ -158,7 +158,7 @@ object Mounting {
   }
 
   object Ops {
-    implicit def apply[S[_]](implicit S0: Functor[S], S1: MountingF :<: S): Ops[S] =
+    implicit def apply[S[_]](implicit S: Mounting :<: S): Ops[S] =
       new Ops[S]
   }
 }

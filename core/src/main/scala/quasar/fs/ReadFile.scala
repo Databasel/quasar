@@ -58,7 +58,7 @@ object ReadFile {
   final case class Close(h: ReadHandle)
     extends ReadFile[Unit]
 
-  final class Ops[S[_]](implicit S: Functor[S], val unsafe: Unsafe[S]) {
+  final class Ops[S[_]](implicit val unsafe: Unsafe[S]) {
     type F[A] = unsafe.F[A]
     type M[A] = unsafe.M[A]
 
@@ -101,7 +101,7 @@ object ReadFile {
   }
 
   object Ops {
-    implicit def apply[S[_]](implicit S: Functor[S], U: Unsafe[S]): Ops[S] =
+    implicit def apply[S[_]](implicit U: Unsafe[S]): Ops[S] =
       new Ops[S]
   }
 
@@ -109,7 +109,7 @@ object ReadFile {
     * when using these.
     */
   @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
-  final class Unsafe[S[_]](implicit S0: Functor[S], S1: ReadFileF :<: S)
+  final class Unsafe[S[_]](implicit S: ReadFile :<: S)
     extends LiftedOps[ReadFile, S] {
 
     type M[A] = FileSystemErrT[F, A]
@@ -138,7 +138,7 @@ object ReadFile {
   }
 
   object Unsafe {
-    implicit def apply[S[_]](implicit S0: Functor[S], S1: ReadFileF :<: S): Unsafe[S] =
+    implicit def apply[S[_]](implicit S: ReadFile :<: S): Unsafe[S] =
       new Unsafe[S]
   }
 

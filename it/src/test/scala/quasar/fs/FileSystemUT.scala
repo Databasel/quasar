@@ -18,6 +18,7 @@ package quasar.fs
 
 import quasar.Predef._
 import quasar.BackendName
+import quasar.fp.free.foldMapNT
 
 import scalaz._
 import scalaz.concurrent.Task
@@ -40,13 +41,20 @@ final case class FileSystemUT[S[_]](
   testDir:     ADir,
   close:       Task[Unit]
 ) {
-  import quasar.fp.hoistFree
 
   type F[A] = Free[S, A]
 
   def contramap[T[_]](f: T ~> S): FileSystemUT[T] =
     FileSystemUT(name, testInterp compose f, setupInterp compose f, testDir, close)
 
-  def testInterpM(implicit S: Functor[S]): F ~> Task = hoistFree(testInterp)
-  def setupInterpM(implicit S: Functor[S]): F ~> Task = hoistFree(setupInterp)
+  def contramapF[T[_]](f: T ~> Free[S, ?]): FileSystemUT[T] =
+    FileSystemUT(
+      name,
+      foldMapNT(testInterp) compose f,
+      foldMapNT(setupInterp) compose f,
+      testDir,
+      close)
+
+  val testInterpM: F ~> Task = foldMapNT(testInterp)
+  val setupInterpM: F ~> Task = foldMapNT(setupInterp)
 }

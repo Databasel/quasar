@@ -41,7 +41,7 @@ object FileSystemDef {
   type DefErrT[F[_], A]       = EitherT[F, DefinitionError, A]
 
   final case class DefinitionResult[F[_]](run: FileSystem ~> F, close: F[Unit]) {
-    def translate[G[_]: Functor](f: F ~> G): DefinitionResult[G] =
+    def translate[G[_]](f: F ~> G): DefinitionResult[G] =
       DefinitionResult(f compose run, f(close))
   }
 

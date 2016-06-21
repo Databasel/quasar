@@ -22,10 +22,10 @@ object lift {
   final class LifterAux[F[_], A](fa: F[A]) {
     type CF[A] = Coyoneda[F, A]
 
-    def into[G[_]: Functor](implicit I: F :<: G): Free[G, A] =
+    def into[G[_]](implicit I: F :<: G): Free[G, A] =
       Free.liftF(I.inj(fa))
 
-    def intoC[G[_]: Functor](implicit I: CF :<: G): Free[G, A] =
+    def intoC[G[_]](implicit I: CF :<: G): Free[G, A] =
       lift[CF, A](Coyoneda.lift(fa)).into[G]
   }
 

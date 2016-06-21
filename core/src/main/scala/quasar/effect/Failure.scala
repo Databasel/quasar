@@ -33,7 +33,7 @@ object Failure {
   final case class Fail[E, A](e: E) extends Failure[E, A]
 
   @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
-  final class Ops[E, S[_]: Functor](implicit S: FailureF[E, ?] :<: S)
+  final class Ops[E, S[_]](implicit S: Failure[E, ?] :<: S)
     extends LiftedOps[Failure[E, ?], S] {
 
     def attempt[A](fa: F[A]): F[E \/ A] =
@@ -66,32 +66,28 @@ object Failure {
     ////
 
     private type Err[A]      = Failure[E, A]
-    private type ErrF[A]     = FailureF[E, A]
     private type G[A]        = EitherT[F, E, A]
     private type GT[X[_], A] = EitherT[X, E, A]
     private type GE[A, B]    = EitherT[F, A, B]
 
-    private val attemptE: ErrF ~> G = {
-      val g: Err ~> G = new (Err ~> G) {
-        val err = MonadError[G, E]
-        def apply[A](ea: Err[A]) = ea match {
-          case Fail(e) => err.raiseError[A](e)
-        }
+    private val attemptE: Err ~> G = new (Err ~> G) {
+      val err = MonadError[G, E]
+      def apply[A](ea: Err[A]) = ea match {
+        case Fail(e) => err.raiseError[A](e)
       }
-      Coyoneda.liftTF(g)
     }
 
     private val attempt0: S ~> G = new (S ~> G) {
       def apply[A](sa: S[A]) =
         S.prj(sa) match {
-          case Some(errF) => attemptE(errF)
-          case None       => Free.liftF(sa).liftM[GT]
+          case Some(err) => attemptE(err)
+          case None      => Free.liftF(sa).liftM[GT]
         }
     }
   }
 
   object Ops {
-    def apply[E, S[_]: Functor](implicit S: FailureF[E, ?] :<: S): Ops[E, S] =
+    implicit def apply[E, S[_]](implicit S: Failure[E, ?] :<: S): Ops[E, S] =
       new Ops[E, S]
   }
 
@@ -109,15 +105,14 @@ object Failure {
       }
     }
 
-  def toCatchable[F[_],E <: Throwable](implicit C: Catchable[F]): Failure[E,?] ~> F =
-    new (Failure[E,?] ~> F) {
-      def apply[A](fa: Failure[E,A]) = fa match {
+  def toCatchable[F[_], E <: Throwable](implicit C: Catchable[F]): Failure[E, ?] ~> F =
+    new (Failure[E, ?] ~> F) {
+      def apply[A](fa: Failure[E, A]) = fa match {
         case Fail(e) => C.fail(e)
       }
     }
 
-  def toRuntimeError[F[_]:Catchable,E: Show]: Failure[E, ?] ~> F =
-    toCatchable[F,RuntimeException]
+  def toRuntimeError[F[_]: Catchable, E: Show]: Failure[E, ?] ~> F =
+    toCatchable[F, RuntimeException]
       .compose[Failure[E, ?]](mapError(e => new RuntimeException(e.shows)))
-
 }

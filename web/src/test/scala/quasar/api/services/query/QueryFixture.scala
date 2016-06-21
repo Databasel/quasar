@@ -28,13 +28,14 @@ import quasar.sql.fixpoint._
 import org.http4s._
 import org.specs2.matcher._, MustMatchers._
 import pathy.Path._
-import scalaz.{:+: => _, _}, Scalaz._
+import scalaz._, Scalaz._
 import scalaz.concurrent.Task
 
 object queryFixture {
   import quasar.api.PathUtils.pathUri
 
-  type Eff[A] = (Task :+: (FileSystemFailureF :+: FileSystem)#λ)#λ[A]
+  type Eff0[A] = Coproduct[FileSystemFailure, FileSystem, A]
+  type Eff[A]  = Coproduct[Task, Eff0, A]
 
   case class Query(
     q: String,
@@ -87,9 +88,7 @@ object queryFixture {
   }
 
   def effRespOr(fs: FileSystem ~> Task): Eff ~> ResponseOr =
-    liftMT[Task, ResponseT].compose(NaturalTransformation.refl[Task]) :+:
-    Coyoneda.liftTF[FileSystemFailure, ResponseOr](
-      failureResponseOr[FileSystemError])                             :+:
+    liftMT[Task, ResponseT]             :+:
+    failureResponseOr[FileSystemError]  :+:
     liftMT[Task, ResponseT].compose(fs)
-
 }

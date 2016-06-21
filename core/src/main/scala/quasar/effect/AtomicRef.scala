@@ -43,7 +43,7 @@ object AtomicRef {
   final case class CompareAndSet[V](expect: V, update: V) extends AtomicRef[V, Boolean]
 
   @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
-  final class Ops[V, S[_]: Functor](implicit S: AtomicRefF[V, ?] :<: S)
+  final class Ops[V, S[_]](implicit S: AtomicRef[V, ?] :<: S)
     extends LiftedOps[AtomicRef[V, ?], S] {
 
     /** Set the value of the ref to `update` if the current value is `expect`,
@@ -79,7 +79,7 @@ object AtomicRef {
   }
 
   object Ops {
-    def apply[V, S[_]: Functor](implicit S: AtomicRefF[V, ?] :<: S): Ops[V, S] =
+    def apply[V, S[_]](implicit S: AtomicRef[V, ?] :<: S): Ops[V, S] =
       new Ops[V, S]
   }
 
@@ -125,13 +125,12 @@ object AtomicRef {
 
     final class Aux[V] {
       type Ref[A] = AtomicRef[V, A]
-      type RefF[A] = Coyoneda[Ref, A]
 
-      def apply[S[_]: Functor, F[_]: Applicative]
+      def apply[S[_], F[_]: Applicative]
           (f: V => F[Unit])
           (implicit
             S0: F :<: S,
-            S1: RefF :<: S
+            S1: Ref :<: S
           ): AtomicRef[V, ?] ~> Free[S, ?] = {
         val R = Ops[V, S]
 
@@ -163,10 +162,7 @@ object AtomicRef {
     def apply[A, B](lens: Lens[A, B]) = new Aux(lens)
 
     final class Aux[A, B](lens: Lens[A, B]) {
-      type RefA[C] = AtomicRef[A, C]
-      type RefAF[C] = Coyoneda[RefA, C]
-
-      def into[S[_]: Functor](implicit S0: RefAF :<: S)
+      def into[S[_]](implicit S: AtomicRef[A, ?] :<: S)
           : AtomicRef[B, ?] ~> Free[S, ?] = {
 
         val R = AtomicRef.Ops[A, S]

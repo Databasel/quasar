@@ -18,22 +18,18 @@ package quasar
 
 import quasar.api._
 import quasar.fp._, free._
-import quasar.fs.{FileSystemError, FileSystemFailure}
+import quasar.fs.FileSystemError
 import quasar.main._
-import quasar.physical.mongodb.MongoErr
 
 import com.mongodb.MongoException
-import scalaz.{Coyoneda, ~>}
+import scalaz.~>
 import scalaz.concurrent.Task
 
 package object server {
-  /** Interpretes errors into `Response`s, for use in web services. */
-  def toResponseOr(evalCfgsIO: MntCfgsIO ~> Task): CfgsErrsIOM ~> ResponseOr = {
-    val f =
-      Coyoneda.liftTF[FileSystemFailure, ResponseOr](failureResponseOr[FileSystemError]) :+:
-      Coyoneda.liftTF[MongoErr, ResponseOr](failureResponseOr[MongoException])           :+:
-      (liftMT[Task, ResponseT] compose evalCfgsIO)
-
-    hoistFree(f: CfgsErrsIO ~> ResponseOr)
+  /** Interprets errors into `Response`s, for use in web services. */
+  def toResponseOr(evalCfgsIO: MntCfgsIO ~> Task): CfgsErrsIO ~> ResponseOr = {
+    failureResponseOr[FileSystemError]           :+:
+    failureResponseOr[MongoException]            :+:
+    (liftMT[Task, ResponseT] compose evalCfgsIO)
   }
 }

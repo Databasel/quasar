@@ -30,9 +30,11 @@ import scalaz._, Scalaz._
 
 object compile {
 
-  def service[S[_]: Functor](
-    implicit Q: QueryFile.Ops[S], M: ManageFile.Ops[S]):
-      QHttpService[S] = {
+  def service[S[_]](
+    implicit
+    Q: QueryFile.Ops[S],
+    M: ManageFile.Ops[S]
+  ): QHttpService[S] = {
     def phaseResultsResponse(prs: PhaseResults): Option[QResponse[S]] =
       prs.lastOption map {
         case PhaseResult.Tree(name, value)   => Json(name := value).toResponse
