@@ -108,7 +108,6 @@ object ReadFile {
   /** Low-level, unsafe operations. Clients are responsible for resource-safety
     * when using these.
     */
-  @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
   final class Unsafe[S[_]](implicit S: ReadFile :<: S)
     extends LiftedOps[ReadFile, S] {
 

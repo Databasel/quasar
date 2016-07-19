@@ -17,11 +17,12 @@
 package quasar.fs
 
 import quasar.Predef._
-import quasar._, RenderTree.ops._
+import quasar._, Planner._, RenderTree.ops._
 import quasar.effect.LiftedOps
 import quasar.fp._
+import quasar.qscript._
 
-import matryoshka._
+import matryoshka._, TraverseT.ops._
 import pathy.Path._
 import scalaz._, Scalaz._
 import scalaz.iteratee._
@@ -39,6 +40,18 @@ object QueryFile {
     implicit val resultHandleOrder: Order[ResultHandle] =
       Order.orderBy(_.run)
   }
+
+  val qscript = new Transform[Fix, QScriptInternal[Fix, ?]]
+  val optimize = new Optimize[Fix]
+  val elide = scala.Predef.implicitly[ElideBuckets.Aux[Fix, QScriptInternal[Fix, ?], QScriptProject[Fix, ?]]]
+
+
+  /** This is a stop-gap function that QScript-based backends should use until
+    * LogicalPlan no longer needs to be exposed.
+    */
+  val convertToQScript: Fix[LogicalPlan] => PlannerError \/ Fix[QScriptProject[Fix, ?]] =
+    _.transCataM(qscript.lpToQScript).evalZero.map(
+      _.transCata(elide.purify ⋙ optimize.applyAll))
 
   /** The result of the query is stored in an output file
     * instead of being returned to the user immidiately.
@@ -102,7 +115,6 @@ object QueryFile {
   // TODO[scalaz]: Shadow the scalaz.Monad.monadMTMAB SI-2712 workaround
   import EitherT.eitherTMonad
 
-  @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
   final class Ops[S[_]](implicit S: QueryFile :<: S)
     extends LiftedOps[QueryFile, S] {
 
@@ -221,7 +233,6 @@ object QueryFile {
   /** Low-level, unsafe operations. Clients are responsible for resource-safety
     * when using these.
     */
-  @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
   final class Unsafe[S[_]](implicit S: QueryFile :<: S)
     extends LiftedOps[QueryFile, S] {
 

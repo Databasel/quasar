@@ -22,8 +22,7 @@ import quasar.api.PathUtils
 import quasar.api.matchers._
 import quasar.api.ApiError
 import quasar.api.ApiErrorEntityDecoder._
-import quasar.fp.PathyCodecJson._
-import quasar.fs.InMemory._
+import quasar.fs._, InMemory._
 
 import argonaut._, Argonaut._
 import org.http4s._
@@ -31,6 +30,7 @@ import org.specs2.specification.core.Fragments
 import org.specs2.ScalaCheck
 import org.specs2.scalaz.ScalazMatchers._
 import pathy.Path, Path._
+import pathy.argonaut.PosixCodecJson._
 import pathy.scalacheck.PathyArbitrary._
 import scalaz._, Scalaz._
 

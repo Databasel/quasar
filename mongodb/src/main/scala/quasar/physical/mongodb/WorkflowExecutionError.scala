@@ -19,9 +19,9 @@ package quasar.physical.mongodb
 import quasar.Predef._
 import quasar.RenderTree
 import quasar.fp._
-
 import quasar.physical.mongodb.workflowtask._
 
+import monocle.Prism
 import scalaz._
 import scalaz.syntax.show._
 
@@ -37,15 +37,15 @@ object WorkflowExecutionError {
 
   final case object NoDatabase extends WorkflowExecutionError
 
-  val invalidTask = pPrism[WorkflowExecutionError, (WorkflowTask, String)] {
+  val invalidTask = Prism.partial[WorkflowExecutionError, (WorkflowTask, String)] {
     case InvalidTask(t, r) => (t, r)
   } (InvalidTask.tupled)
 
-  val insertFailed = pPrism[WorkflowExecutionError, (Bson, String)] {
+  val insertFailed = Prism.partial[WorkflowExecutionError, (Bson, String)] {
     case InsertFailed(b, r) => (b, r)
   } (InsertFailed.tupled)
 
-  val noDatabase = pPrism[WorkflowExecutionError, Unit] {
+  val noDatabase = Prism.partial[WorkflowExecutionError, Unit] {
     case NoDatabase => ()
   } (κ(NoDatabase))
 

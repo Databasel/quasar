@@ -31,8 +31,6 @@ import scalaz.syntax.functor._
 /** Implements the necessary operations for executing a `Workflow` against
   * MongoDB.
   */
-// https://github.com/puffnfresh/wartremover/issues/149
-@SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
 private[mongodb] final class JavaScriptWorkflowExecutor
   extends WorkflowExecutor[JavaScriptLog, Unit] {
 

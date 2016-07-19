@@ -19,6 +19,7 @@ package quasar.physical.mongodb
 import quasar.Predef._
 import quasar.effect.Failure
 import quasar.fp._
+import quasar.fs._
 
 import java.lang.{Boolean => JBoolean}
 import java.util.LinkedList
@@ -46,8 +47,8 @@ final class MongoDbIO[A] private (protected val r: ReaderT[Task, MongoClient, A]
     new MongoDbIO(r mapK (_.attempt))
 
   def attemptMongo: MongoErrT[MongoDbIO, A] =
-    EitherT(attempt flatMap {
-      case -\/(me: MongoException) => me.left.point[MongoDbIO]
+    EitherT(attempt >>= {
+      case -\/(me: MongoException) => unhandledFSError(me).left.point[MongoDbIO]
       case -\/(t)                  => MongoDbIO.fail(t)
       case \/-(a)                  => a.right.point[MongoDbIO]
     })
@@ -59,9 +60,9 @@ final class MongoDbIO[A] private (protected val r: ReaderT[Task, MongoClient, A]
     c: MongoClient
   )(implicit
     S0: Task :<: S,
-    S1: MongoErr :<: S
+    S1: PhysErr :<: S
   ): Free[S, A] = {
-    val mongoErr = Failure.Ops[MongoException, S]
+    val mongoErr = Failure.Ops[PhysicalError, S]
     mongoErr.unattempt(free.lift(attemptMongo.run.run(c)).into[S])
   }
 }
@@ -257,19 +258,21 @@ object MongoDbIO {
 
   /** Returns the version of the MongoDB server the client is connected to. */
   def serverVersion: MongoDbIO[List[Int]] = {
-    def lookupVersion(dbName: String): MongoDbIO[MongoException \/ List[Int]] = {
+    def lookupVersion(dbName: String): MongoDbIO[PhysicalError \/ List[Int]] = {
       val cmd = Bson.Doc(ListMap("buildinfo" -> Bson.Int32(1)))
 
       runCommand(dbName, cmd).attemptMongo.run map (_ flatMap (doc =>
         Option(doc getString "version")
-          .toRightDisjunction(new MongoException("Unable to determine server version, buildInfo response is missing the 'version' field"))
+          // FIXME: Shouldn’t be creating fresh MongoExceptions
+          .toRightDisjunction(UnhandledFSError(new MongoException("Unable to determine server version, buildInfo response is missing the 'version' field")))
           .map(_.getValue.split('.').toList.map(_.toInt))))
     }
 
-    val finalize: ((Vector[MongoException], Vector[List[Int]])) => MongoDbIO[List[Int]] = {
+    val finalize: ((Vector[PhysicalError], Vector[List[Int]])) => MongoDbIO[List[Int]] = {
       case (errs, vers) =>
         vers.headOption.map(_.point[MongoDbIO]) orElse
-        errs.headOption.map(fail[List[Int]])  getOrElse
+        errs.headOption.map(ex => fail[List[Int]](ex.cause)) getOrElse
+        // FIXME: Shouldn’t be creating fresh MongoExceptions
         fail(new MongoException("No database found."))
     }
 
@@ -324,7 +327,7 @@ object MongoDbIO {
     val sortRepr =
       cfg.inputSort map (ts =>
         Bson.Doc(ListMap(
-          ts.list.toList.map(_.bimap(_.asText, _.bson)): _*
+          ts.list.toList.map(_.bimap(_.asText, sortDirToBson(_))): _*
         )).repr)
 
     val configuredIt =

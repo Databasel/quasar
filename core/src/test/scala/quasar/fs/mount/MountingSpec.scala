@@ -18,7 +18,6 @@ package quasar.fs.mount
 
 import quasar.Predef._
 import quasar.Variables
-import quasar.fp.prism._
 import quasar.fs.{APath, ADir, AFile, PathError, FileSystemType}
 import quasar.specs2.DisjunctionMatchers
 import quasar.sql, sql.Sql

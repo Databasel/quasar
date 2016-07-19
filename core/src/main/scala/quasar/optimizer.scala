@@ -198,32 +198,33 @@ object Optimizer {
   }
 
   // TODO add scalaz propery test
-  implicit val ComponentApplicative = new Applicative[Component] {
-    def point[A](a: => A): Component[A] = NeitherCond(a)
+  implicit val ComponentApplicative: Applicative[Component] =
+    new Applicative[Component] {
+      def point[A](a: => A): Component[A] = NeitherCond(a)
 
-    def ap[A, B](fa: => Component[A])(f: => Component[A => B]): Component[B] =
-      (fa, f) match {
-             // A             // A => B
-        case (NeitherCond(a), NeitherCond(g)) => NeitherCond(g(a))
+      def ap[A, B](fa: => Component[A])(f: => Component[A => B]): Component[B] =
+        (fa, f) match {
+          // A             // A => B
+          case (NeitherCond(a), NeitherCond(g)) => NeitherCond(g(a))
 
-             // A             // LP => A => B
-        case (NeitherCond(a), LeftCond(g))    => LeftCond(g(_)(a))
-             // A             // LP => A => B
-        case (NeitherCond(a), RightCond(g))   => RightCond(g(_)(a))
+          // A             // LP => A => B
+          case (NeitherCond(a), LeftCond(g))    => LeftCond(g(_)(a))
+          // A             // LP => A => B
+          case (NeitherCond(a), RightCond(g))   => RightCond(g(_)(a))
 
-             // LP => A       // A => B
-        case (LeftCond(a),    NeitherCond(g)) => LeftCond(g <<< a) // lp => g(a(lp))
-             // LP => A       // LP => A => B
-        case (LeftCond(a),    LeftCond(g))    => LeftCond(lp => g(lp)(a(lp)))
+          // LP => A       // A => B
+          case (LeftCond(a),    NeitherCond(g)) => LeftCond(g <<< a) // lp => g(a(lp))
+                                                                     // LP => A       // LP => A => B
+          case (LeftCond(a),    LeftCond(g))    => LeftCond(lp => g(lp)(a(lp)))
 
-             // LP => A       // A => B
-        case (RightCond(a),   NeitherCond(g)) => RightCond(g <<< a)
-             // LP => A       // LP => A => B
-        case (RightCond(a),   RightCond(g))   => RightCond(lp => g(lp)(a(lp)))
+          // LP => A       // A => B
+          case (RightCond(a),   NeitherCond(g)) => RightCond(g <<< a)
+          // LP => A       // LP => A => B
+          case (RightCond(a),   RightCond(g))   => RightCond(lp => g(lp)(a(lp)))
 
-        case (ca, cg)                         => OtherCond((l, r) => cg.run(l, r)(ca.run(l, r)))
+          case (ca, cg)                         => OtherCond((l, r) => cg.run(l, r)(ca.run(l, r)))
+        }
     }
-  }
 
   /** Rewrite joins and subsequent filtering so that:
     * 1) Filtering that is equivalent to an equi-join is rewritten into the join condition.

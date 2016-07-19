@@ -17,7 +17,6 @@
 package quasar.config
 
 import quasar.Predef._
-import quasar.fp.prism._
 import quasar.fs.mount._
 import quasar.physical.mongodb.fs.MongoDBFsType
 

@@ -46,7 +46,7 @@ trait DateLib extends Library {
       Data.Interval.apply)
   }
 
-  private def startOfDayInstant(date: LocalDate): Instant =
+  def startOfDayInstant(date: LocalDate): Instant =
     date.atStartOfDay.atZone(ZoneOffset.UTC).toInstant
 
   def startOfDay(date: Data.Date): Data.Timestamp =

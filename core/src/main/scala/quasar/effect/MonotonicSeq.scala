@@ -41,7 +41,6 @@ sealed trait MonotonicSeq[A]
 object MonotonicSeq {
   case object Next extends MonotonicSeq[Long]
 
-  @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
   final class Ops[S[_]](implicit S: MonotonicSeq :<: S)
     extends LiftedOps[MonotonicSeq, S] {
 

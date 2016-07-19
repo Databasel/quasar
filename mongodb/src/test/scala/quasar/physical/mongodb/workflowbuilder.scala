@@ -21,6 +21,7 @@ import quasar.RenderTree
 import quasar.fp._
 import quasar._; import Planner._
 import quasar.javascript._
+import quasar.qscript.SortDir
 import quasar.specs2._
 
 import matryoshka._, FunctorT.ops._
@@ -180,13 +181,13 @@ class WorkflowBuilderSpec
       val read = WorkflowBuilder.read(Collection("db", "zips"))
       val op = (for {
         key  <- lift(projectField(read, "city"))
-        sort =  sortBy(read, List(key), Ascending :: Nil)
+        sort =  sortBy(read, List(key), SortDir.Ascending :: Nil)
         rez  <- build(sort)
       } yield rez).evalZero
 
       op must beRightDisjOrDiff(chain(
         $read(Collection("db", "zips")),
-        $sort(NonEmptyList(BsonField.Name("city") -> Ascending))))
+        $sort(NonEmptyList(BsonField.Name("city") -> SortDir.Ascending))))
     }
 
     "merge index projections" in {
@@ -297,7 +298,7 @@ class WorkflowBuilderSpec
         left   =  makeObject(city, "city")
         right  =  makeObject(state, "state")
         projs  <- objectConcat(left, right)
-        sorted =  sortBy(projs, List(city, state), List(Ascending, Ascending))
+        sorted =  sortBy(projs, List(city, state), List(SortDir.Ascending, SortDir.Ascending))
 
         // NB: the compiler would not generate this op between sort and distinct
         lim    =  limit(sorted, 10)
@@ -313,8 +314,8 @@ class WorkflowBuilderSpec
           BsonField.Name("state") -> \/-($field("state")))),
           IgnoreId),
         $sort(NonEmptyList(
-          BsonField.Name("city") -> Ascending,
-          BsonField.Name("state") -> Ascending)),
+          BsonField.Name("city") -> SortDir.Ascending,
+          BsonField.Name("state") -> SortDir.Ascending)),
         $limit(10),
         $group(
           Grouped(ListMap(
@@ -324,8 +325,8 @@ class WorkflowBuilderSpec
             BsonField.Name("0") -> \/-($field("city")),
             BsonField.Name("1") -> \/-($field("state")))))),
         $sort(NonEmptyList(
-          BsonField.Name("city")  -> Ascending,
-          BsonField.Name("state") -> Ascending))))
+          BsonField.Name("city")  -> SortDir.Ascending,
+          BsonField.Name("state") -> SortDir.Ascending))))
     }
 
     "group in proj" in {

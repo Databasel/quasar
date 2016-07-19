@@ -17,15 +17,17 @@
 package quasar.api.services
 
 import quasar.Predef._
-import quasar.api._
+import quasar.api._, ToApiError.ops._, ToQResponse.ops._
 import quasar.api.{Destination, HeaderParam}
+import quasar.fp.liftMT
+import quasar.fp.free.foldMapNT
 import quasar.fs._
 import quasar.fs.mount._
 
 import scala.concurrent.duration._
 import scala.collection.immutable.ListMap
 
-import org.http4s.HttpService
+import org.http4s._
 import org.http4s.dsl._
 import org.http4s.server.HttpMiddleware
 import org.http4s.server.middleware.{CORS, CORSConfig, GZip}
@@ -42,8 +44,7 @@ object RestApi {
         S3: ManageFile :<: S,
         S4: Mounting :<: S,
         S5: QueryFile :<: S,
-        S6: FileSystemFailure :<: S,
-        S7: MountConfigs :<: S
+        S6: FileSystemFailure :<: S
       ): Map[String, QHttpService[S]] =
     ListMap(
       "/compile/fs"  -> query.compile.service[S],
@@ -58,29 +59,34 @@ object RestApi {
       "/welcome" -> welcome.service
     )
 
-  /** Converts `QHttpService`s into `HttpService`s and mounts them along with
-    * any additional `HttpService`s provided, applying the default middleware
-    * to the result.
+  /** Mount services and apply default middleware to the result.
     *
-    * TODO: Is using `Prefix` necessary? Can we replace with
-    *       `org.http4s.server.Router` instead?
+    * TODO: Replace `Prefix` with `org.http4s.server.Router`.
     */
-  def finalizeServices[S[_]](
-    f: S ~> ResponseOr)(
-    qsvcs: Map[String, QHttpService[S]],
-    hsvcs: Map[String, HttpService]
-  ): HttpService = {
-    val allSvcs = qsvcs.mapValues(_.toHttpService(f)) ++ hsvcs
-    // Sort by prefix length so that foldLeft results in routes procesed in
+  def finalizeServices(svcs: Map[String, HttpService]): HttpService = {
+    // Sort by prefix length so that foldLeft results in routes processed in
     // descending order (longest first), this ensures that something mounted
     // at `/a/b/c` is consulted before a mount at `/a/b`.
-    defaultMiddleware(allSvcs.toList.sortBy(_._1.length).foldLeft(HttpService.empty) {
-      case (acc, (path, svc)) => Prefix(path)(svc) orElse acc
-    })
+    defaultMiddleware(
+      svcs.toList.sortBy(_._1.length).foldLeft(HttpService.empty) {
+        case (acc, (path, svc)) => Prefix(path)(svc) orElse acc
+      })
   }
 
+  def toHttpServices[S[_]](
+    f: S ~> ResponseOr,
+    svcs: Map[String, QHttpService[S]])
+    : Map[String, HttpService] =
+    toHttpServicesF(foldMapNT(f), svcs)
+
+  def toHttpServicesF[S[_]](
+    f: Free[S, ?] ~> ResponseOr,
+    svcs: Map[String, QHttpService[S]])
+    : Map[String, HttpService] =
+    svcs.mapValues(_.toHttpServiceF(f))
+
   def defaultMiddleware: HttpMiddleware =
-    (cors(_)) <<< gzip <<< HeaderParam <<< passOptions
+    cors compose gzip compose HeaderParam compose passOptions compose errorHandling
 
   val cors: HttpMiddleware =
     CORS(_, CORSConfig(
@@ -97,4 +103,12 @@ object RestApi {
     _ orElse HttpService {
       case req if req.method == OPTIONS => Ok()
     }
+
+  val errorHandling: HttpMiddleware =
+    _.mapK(_ handleWith {
+      case msgFail: MessageFailure =>
+        msgFail.toApiError
+          .toResponse[Task]
+          .toHttpResponse(liftMT[Task, ResponseT])
+    })
 }

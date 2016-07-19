@@ -22,7 +22,7 @@ import quasar.DataArbitrary._
 import quasar.api._,
   ApiErrorEntityDecoder._, MessageFormat.JsonContentType, MessageFormatGen._
 import quasar.api.matchers._
-import quasar.fp._, PathyCodecJson._
+import quasar.fp._
 import quasar.fp.free._
 import quasar.fp.numeric._
 import quasar.fs._, PathArbitrary._
@@ -39,6 +39,7 @@ import org.specs2.mutable.Specification
 import org.specs2.scalaz.ScalazMatchers._
 import org.specs2.ScalaCheck
 import pathy.Path, Path._
+import pathy.argonaut.PosixCodecJson._
 import pathy.scalacheck.PathyArbitrary._
 import scalaz.{Failure => _, _}, Scalaz._
 import scalaz.concurrent.Task

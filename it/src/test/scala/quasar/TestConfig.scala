@@ -43,8 +43,9 @@ object TestConfig {
   val MONGO_3_0 = BackendName("mongodb_3_0")
   val MONGO_3_2 = BackendName("mongodb_3_2")
   val MONGO_READ_ONLY = BackendName("mongodb_read_only")
+  val SKELETON = BackendName("skeleton")
 
-  lazy val backendNames: List[BackendName] = List(MONGO_2_6, MONGO_3_0, MONGO_3_2, MONGO_READ_ONLY)
+  lazy val backendNames: List[BackendName] = List(MONGO_2_6, MONGO_3_0, MONGO_3_2, MONGO_READ_ONLY, SKELETON)
 
   /** True if this backend configuration is for a mongo connection where the
     * user has the "read-only" role.

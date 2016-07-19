@@ -121,27 +121,27 @@ object Main {
 
     val main0: MainTask[Unit] = for {
       opts         <- CliOptions.parser.parse(args, CliOptions.default)
-                      .cata(_.point[MainTask], MainTask.raiseError("couldn't parse options"))
+                      .cata(_.point[MainTask], MainTask.raiseError("Couldn't parse options."))
       cfgPath      <- opts.config.fold(none[FsFile].point[MainTask])(cfg =>
                         FsPath.parseSystemFile(cfg)
-                          .toRight(s"Invalid path to config file: $cfg")
+                          .toRight(s"Invalid path to config file: $cfg.")
                           .map(some))
 
       config       <- cfgPath.cata(cfgOps.fromFile, cfgOps.fromDefaultPaths).leftMap(_.shows)
 
       // NB: for now, there's no way to add mounts through the REPL, so no point
       // in starting if you can't do anything and can't correct the situation.
-      _            <- if (config.mountings.toMap.isEmpty) MainTask.raiseError("No mounts present")
+      _            <- if (config.mountings.toMap.isEmpty) MainTask.raiseError("No mounts configured.")
                       else ().point[MainTask]
 
       cfgRef       <- TaskRef(config).liftM[MainErrT]
       mntCfgsT     =  writeConfig(CoreConfig.mountings, cfgRef, cfgPath)
-      coreApi      <- CoreEff.interpreter[CoreConfig](mntCfgsT).liftM[MainErrT]
-      ephemeralApi =  foldMapNT(CfgsErrsIO.toMainTask(MntCfgsIO.ephemeral)) compose coreApi
-      _            <- (mountAll[CoreEff](config.mountings) foldMap ephemeralApi).flatMapF(_.point[Task])
+      coreApi      <- CoreEff.interpreter.liftM[MainErrT]
+      ephemeralApi =  foldMapNT(CfgsErrsIO.toMainTask(ephemeralMountConfigs[Task])) compose coreApi
+      failedMnts   <- attemptMountAll[CoreEff](config.mountings) foldMap ephemeralApi
+      _            <- failedMnts.toList.traverse_(logFailedMount).liftM[MainErrT]
 
-      durableApi   =  foldMapNT(CfgsErrsIO.toMainTask(MntCfgsIO.durable[CoreConfig](mntCfgsT)))
-                        .compose(coreApi)
+      durableApi   =  foldMapNT(CfgsErrsIO.toMainTask(mntCfgsT)).compose(coreApi)
 
       r            <- EitherT.right(repl(mt compose (durableApi compose injectNT[MountingFileSystem, CoreEff])))
       _            <- EitherT.right(driver(r))

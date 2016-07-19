@@ -21,31 +21,32 @@ import quasar.fp._
 import quasar.fs._
 
 import matryoshka._, Recursive.ops._, FunctorT.ops._, TraverseT.nonInheritedOps._
+import monocle.Prism
 import pathy.Path.posixCodec
 import scalaz._, Scalaz._
 
 package object sql {
-  def select[A] = pPrism[Sql[A], (IsDistinct, List[Proj[A]], Option[SqlRelation[A]], Option[A], Option[GroupBy[A]], Option[OrderBy[A]])] {
+  def select[A] = Prism.partial[Sql[A], (IsDistinct, List[Proj[A]], Option[SqlRelation[A]], Option[A], Option[GroupBy[A]], Option[OrderBy[A]])] {
     case Select(d, p, r, f, g, o) => (d, p, r, f, g, o)
   } ((Select[A] _).tupled)
 
-  def vari[A] = pPrism[Sql[A], String] { case Vari(sym) => sym } (Vari(_))
-  def setLiteral[A] = pPrism[Sql[A], List[A]] { case SetLiteral(exprs) => exprs } (SetLiteral(_))
-  def arrayLiteral[A] = pPrism[Sql[A], List[A]] { case ArrayLiteral(exprs) => exprs } (ArrayLiteral(_))
-  def mapLiteral[A] = pPrism[Sql[A], List[(A, A)]] { case MapLiteral(exprs) => exprs } (MapLiteral(_))
-  def splice[A] = pPrism[Sql[A], Option[A]] { case Splice(exprs) => exprs } (Splice(_))
-  def binop[A] = pPrism[Sql[A], (A, A, BinaryOperator)] { case Binop(l, r, op) => (l, r, op) } ((Binop[A] _).tupled)
-  def unop[A] = pPrism[Sql[A], (A, UnaryOperator)] { case Unop(a, op) => (a, op) } ((Unop[A] _).tupled)
-  def ident[A] = pPrism[Sql[A], String] { case Ident(name) => name } (Ident(_))
-  def invokeFunction[A] = pPrism[Sql[A], (String, List[A])] { case InvokeFunction(name, args) => (name, args) } ((InvokeFunction[A] _).tupled)
-  def matc[A] = pPrism[Sql[A], (A, List[Case[A]], Option[A])] { case Match(expr, cases, default) => (expr, cases, default) } ((Match[A] _).tupled)
-  def switch[A] = pPrism[Sql[A], (List[Case[A]], Option[A])] { case Switch(cases, default) => (cases, default) } ((Switch[A] _).tupled)
-  def let[A] = pPrism[Sql[A], (String, A, A)] { case Let(n, f, b) => (n, f, b) } ((Let[A](_, _, _)).tupled)
-  def intLiteral[A] = pPrism[Sql[A], Long] { case IntLiteral(v) => v } (IntLiteral(_))
-  def floatLiteral[A] = pPrism[Sql[A], Double] { case FloatLiteral(v) => v } (FloatLiteral(_))
-  def stringLiteral[A] = pPrism[Sql[A], String] { case StringLiteral(v) => v } (StringLiteral(_))
-  def nullLiteral[A] = pPrism[Sql[A], Unit] { case NullLiteral() => () } (_ => NullLiteral())
-  def boolLiteral[A] = pPrism[Sql[A], Boolean] { case BoolLiteral(v) => v } (BoolLiteral(_))
+  def vari[A] = Prism.partial[Sql[A], String] { case Vari(sym) => sym } (Vari(_))
+  def setLiteral[A] = Prism.partial[Sql[A], List[A]] { case SetLiteral(exprs) => exprs } (SetLiteral(_))
+  def arrayLiteral[A] = Prism.partial[Sql[A], List[A]] { case ArrayLiteral(exprs) => exprs } (ArrayLiteral(_))
+  def mapLiteral[A] = Prism.partial[Sql[A], List[(A, A)]] { case MapLiteral(exprs) => exprs } (MapLiteral(_))
+  def splice[A] = Prism.partial[Sql[A], Option[A]] { case Splice(exprs) => exprs } (Splice(_))
+  def binop[A] = Prism.partial[Sql[A], (A, A, BinaryOperator)] { case Binop(l, r, op) => (l, r, op) } ((Binop[A] _).tupled)
+  def unop[A] = Prism.partial[Sql[A], (A, UnaryOperator)] { case Unop(a, op) => (a, op) } ((Unop[A] _).tupled)
+  def ident[A] = Prism.partial[Sql[A], String] { case Ident(name) => name } (Ident(_))
+  def invokeFunction[A] = Prism.partial[Sql[A], (String, List[A])] { case InvokeFunction(name, args) => (name, args) } ((InvokeFunction[A] _).tupled)
+  def matc[A] = Prism.partial[Sql[A], (A, List[Case[A]], Option[A])] { case Match(expr, cases, default) => (expr, cases, default) } ((Match[A] _).tupled)
+  def switch[A] = Prism.partial[Sql[A], (List[Case[A]], Option[A])] { case Switch(cases, default) => (cases, default) } ((Switch[A] _).tupled)
+  def let[A] = Prism.partial[Sql[A], (String, A, A)] { case Let(n, f, b) => (n, f, b) } ((Let[A](_, _, _)).tupled)
+  def intLiteral[A] = Prism.partial[Sql[A], Long] { case IntLiteral(v) => v } (IntLiteral(_))
+  def floatLiteral[A] = Prism.partial[Sql[A], Double] { case FloatLiteral(v) => v } (FloatLiteral(_))
+  def stringLiteral[A] = Prism.partial[Sql[A], String] { case StringLiteral(v) => v } (StringLiteral(_))
+  def nullLiteral[A] = Prism.partial[Sql[A], Unit] { case NullLiteral() => () } (_ => NullLiteral())
+  def boolLiteral[A] = Prism.partial[Sql[A], Boolean] { case BoolLiteral(v) => v } (BoolLiteral(_))
 
   // NB: we need to support relative paths, including `../foo`
   type FUPath = pathy.Path[_, pathy.Path.File, pathy.Path.Unsandboxed]
@@ -148,6 +149,8 @@ package object sql {
     (r match {
       case IdentRelationAST(name, alias) =>
         _qq("`", name) :: alias.map("as " + _).toList
+      case VariRelationAST(vari, alias) =>
+        (":" + vari.symbol) :: alias.map("as " + _).toList
       case TableRelationAST(path, alias) =>
         _qq("`", prettyPrint(path)) :: alias.map("as " + _).toList
       case ExprRelationAST(expr, aliasName) =>
@@ -262,6 +265,8 @@ package object sql {
     r match {
       case IdentRelationAST(name, alias) =>
         G.point(IdentRelationAST(name, alias))
+      case VariRelationAST(vari, alias) =>
+        G.point(VariRelationAST(Vari(vari.symbol), alias))
       case TableRelationAST(name, alias) =>
         G.point(TableRelationAST(name, alias))
       case ExprRelationAST(expr, aliasName) =>
@@ -280,6 +285,9 @@ package object sql {
           case IdentRelationAST(name, alias) =>
             val aliasString = alias.cata(" as " + _, "")
             Terminal("IdentRelation" :: astType, Some(name + aliasString))
+          case VariRelationAST(vari, alias) =>
+            val aliasString = alias.cata(" as " + _, "")
+            Terminal("VariRelation" :: astType, Some(":" + vari.symbol + aliasString))
           case ExprRelationAST(select, alias) =>
             NonTerminal("ExprRelation" :: astType, Some("Expr as " + alias), ra.render(select) :: Nil)
           case TableRelationAST(name, alias) =>

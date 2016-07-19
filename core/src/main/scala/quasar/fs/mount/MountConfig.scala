@@ -18,7 +18,6 @@ package quasar.fs.mount
 
 import quasar.Predef._
 import quasar.{Variables, VarName, VarValue}
-import quasar.fp._
 import quasar.fs.FileSystemType
 import quasar.sql, sql.Sql
 
@@ -37,16 +36,17 @@ object MountConfig {
   final case class FileSystemConfig private[mount] (typ: FileSystemType, uri: ConnectionUri)
     extends MountConfig
 
-  val viewConfig = pPrism[MountConfig, (Fix[Sql], Variables)] {
+  val viewConfig = Prism.partial[MountConfig, (Fix[Sql], Variables)] {
     case ViewConfig(query, vars) => (query, vars)
   } ((ViewConfig(_, _)).tupled)
 
   val viewConfigUri: Prism[String, (Fix[Sql], Variables)] =
     Prism((viewCfgFromUri _) andThen (_.toOption))((viewCfgAsUri _).tupled)
 
-  val fileSystemConfig = pPrism[MountConfig, (FileSystemType, ConnectionUri)] {
-    case FileSystemConfig(typ, uri) => (typ, uri)
-  } ((FileSystemConfig(_, _)).tupled)
+  val fileSystemConfig =
+    Prism.partial[MountConfig, (FileSystemType, ConnectionUri)] {
+      case FileSystemConfig(typ, uri) => (typ, uri)
+    } ((FileSystemConfig(_, _)).tupled)
 
   implicit val mountConfigShow: Show[MountConfig] =
     Show.shows {

@@ -17,20 +17,19 @@
 package quasar.api
 
 import quasar.Predef._
-import quasar.{Data, DataCodec}
-import quasar.{EnvironmentError, Planner, SemanticError}
+import quasar.{Data, DataCodec, EnvironmentError, Planner, SemanticError}
 import quasar.RenderTree.ops._
+import quasar.fp._
 import quasar.fs._
 import quasar.fs.mount.{Mounting, MountingError}
-import quasar.fp._, PathyCodecJson._
 import quasar.sql._
 
 import argonaut._, Argonaut._
 import argonaut.ArgonautScalaz._
-import com.mongodb.MongoException
 import org.http4s._, Status._
 import pathy.Path._
-import scalaz.NonEmptyList
+import pathy.argonaut.PosixCodecJson._
+import scalaz.{NonEmptyList, Scalaz}, Scalaz._
 
 abstract class ToApiError[A] {
   def toApiError(a: A): ApiError
@@ -50,31 +49,12 @@ object ToApiError extends ToApiErrorInstances {
   }
 }
 
-sealed abstract class ToApiErrorInstances {
+sealed abstract class ToApiErrorInstances extends ToApiErrorInstances0 {
   import ToApiError._, ops._
   import ApiError._
   import ReadFile.ReadHandle
   import WriteFile.WriteHandle
   import QueryFile.ResultHandle
-
-  implicit def decodeFailureToApiError: ToApiError[DecodeFailure] =
-    error {
-      case MediaTypeMissing(expectedMediaTypes) =>
-        apiError(
-          BadRequest withReason "Media type missing.",
-          "supportedMediaTypes" := expectedMediaTypes.map(_.renderString))
-
-      case MediaTypeMismatch(messageType, expectedMediaTypes) =>
-        apiError(
-          UnsupportedMediaType,
-          "requestedMediaType"  := messageType.renderString,
-          "supportedMediaTypes" := expectedMediaTypes.map(_.renderString))
-
-      case other =>
-        fromMsg_(
-          BadRequest withReason "Unable to decode request body.",
-          other.message)
-    }
 
   implicit def environmentErrorQResponse: ToApiError[EnvironmentError] = {
     import EnvironmentError._
@@ -111,7 +91,7 @@ sealed abstract class ToApiErrorInstances {
           reason,
           det.toList : _*)            :+
         ("logicalPlan" :=  lp.render) :?+
-        ("cause"       :?= cause.map(_.getMessage))
+        ("cause"       :?= cause.map(_.shows))
       case PathErr(e) =>
         e.toApiError
       case PlanningFailed(lp, e) =>
@@ -142,10 +122,10 @@ sealed abstract class ToApiErrorInstances {
     }
   }
 
-  implicit def mongoExceptionToApiError: ToApiError[MongoException] =
-    error(merr => fromMsg_(
-      InternalServerError withReason "MongoDB error.",
-      merr.getMessage))
+  implicit def physicalErrorToApiError: ToApiError[PhysicalError] =
+    error(err => fromMsg_(
+      InternalServerError withReason "Physical filesystem error.",
+      err.shows))
 
   implicit def mountingErrorToApiError: ToApiError[MountingError] = {
     import MountingError._, PathError.InvalidPath
@@ -201,9 +181,6 @@ sealed abstract class ToApiErrorInstances {
         e.toApiError
     }
 
-  implicit def parseFailureToApiError: ToApiError[ParseFailure] =
-    error(pf => fromMsg_(BadRequest withReason "Malformed request.", pf.sanitized))
-
   implicit def plannerErrorToApiError: ToApiError[Planner.PlannerError] = {
     import Planner._
     error(err => err match {
@@ -212,6 +189,10 @@ sealed abstract class ToApiErrorInstances {
           InternalServerError withReason "Unsupported constant.",
           err.message
         ) :?+ ("data" :?= encodeData(data))
+      case NonRepresentableEJson(_) =>
+        fromMsg_(
+          InternalServerError withReason "Unsupported constant.",
+          err.message)
       case UnsupportedFunction(fn, _) =>
         fromMsg(
           InternalServerError withReason "Unsupported function.",
@@ -340,15 +321,49 @@ sealed abstract class ToApiErrorInstances {
     })
   }
 
+  ////
+
+  private def encodeData(data: Data): Option[Json] =
+    DataCodec.Precise.encode(data).toOption
+}
+
+sealed abstract class ToApiErrorInstances0 {
+  import ToApiError._, ops._
+  import ApiError._
+
+  implicit def messageFailureToApiError[A <: MessageFailure]: ToApiError[A] =
+    error {
+      case err @ InvalidMessageBodyFailure(_, _) =>
+        fromMsg_(
+          BadRequest withReason "Invalid request body.",
+          err.message)
+
+      case ParseFailure(sanitized, _) =>
+        fromMsg_(
+          BadRequest withReason "Malformed request.",
+          sanitized)
+
+      case err @ MalformedMessageBodyFailure(_, _) =>
+        fromMsg_(
+          BadRequest withReason "Malformed request body.",
+          err.message)
+
+      case MediaTypeMissing(expectedMediaTypes) =>
+        apiError(
+          BadRequest withReason "Media type missing.",
+          "supportedMediaTypes" := expectedMediaTypes.map(_.renderString))
+
+      case MediaTypeMismatch(messageType, expectedMediaTypes) =>
+        apiError(
+          UnsupportedMediaType,
+          "requestedMediaType"  := messageType.renderString,
+          "supportedMediaTypes" := expectedMediaTypes.map(_.renderString))
+    }
+
   implicit def nonEmptyListToApiError[A: ToApiError]: ToApiError[NonEmptyList[A]] =
     error { nel =>
       val herr = nel.head.toApiError
       val stat = Status.fromInt(herr.status.code) getOrElse herr.status
       apiError(stat, "errors" := nel.map(_.toApiError))
     }
-
-  ////
-
-  private def encodeData(data: Data): Option[Json] =
-    DataCodec.Precise.encode(data).toOption
 }

@@ -85,12 +85,8 @@ package object services {
   def respond_[S[_], A, F[_]](a: A)(implicit ev: ToQResponse[A, F]): Free[S, QResponse[F]] =
     respond(Free.pure(a))
 
-  // https://github.com/puffnfresh/wartremover/issues/149
-  @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
   object Offset extends OptionalValidatingQueryParamDecoderMatcher[Natural]("offset")
 
-  // https://github.com/puffnfresh/wartremover/issues/149
-  @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
   object Limit  extends OptionalValidatingQueryParamDecoderMatcher[Positive]("limit")
 
   implicit val naturalParamDecoder: QueryParamDecoder[Natural] = new QueryParamDecoder[Natural] {

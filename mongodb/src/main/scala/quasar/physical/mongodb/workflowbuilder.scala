@@ -24,6 +24,7 @@ import quasar._, Planner._
 import quasar.javascript._
 import quasar.std.StdLib._
 import quasar.jscore, jscore.{JsCore, JsFn}
+import quasar.qscript._
 
 import matryoshka._, Recursive.ops._, FunctorT.ops._
 import scalaz._, Scalaz._
@@ -1401,7 +1402,7 @@ object WorkflowBuilder {
     }
 
   def sortBy(
-    src: WorkflowBuilder, keys: List[WorkflowBuilder], sortTypes: List[SortType]):
+    src: WorkflowBuilder, keys: List[WorkflowBuilder], sortTypes: List[SortDir]):
       WorkflowBuilder =
     ShapePreservingBuilder(
       src,

@@ -32,7 +32,6 @@ sealed trait Failure[E, A]
 object Failure {
   final case class Fail[E, A](e: E) extends Failure[E, A]
 
-  @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
   final class Ops[E, S[_]](implicit S: Failure[E, ?] :<: S)
     extends LiftedOps[Failure[E, ?], S] {
 

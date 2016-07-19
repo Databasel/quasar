@@ -314,6 +314,9 @@ trait Compiler[F[_]] {
         case IdentRelationAST(name, _) =>
           CompilerState.subtableReq(name)
 
+        case VariRelationAST(vari, _) =>
+          fail(UnboundVariable(VarName(vari.symbol)))
+
         case TableRelationAST(path, _) =>
           sandboxCurrent(canonicalize(path)).cata(
             p => emit(LogicalPlan.Read(p)),

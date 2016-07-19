@@ -65,7 +65,7 @@ object WorkflowTaskF {
   // final case class EvalTaskF[A](source: A, code: Js.FuncDecl)
   //     extends WorkflowTaskF[A]
 
-  implicit def WorkflowTaskFTraverse: Traverse[WorkflowTaskF] =
+  implicit def traverse: Traverse[WorkflowTaskF] =
     new Traverse[WorkflowTaskF] {
       def traverseImpl[G[_], A, B](fa: WorkflowTaskF[A])(f: A => G[B])(implicit G: Applicative[G]):
           G[WorkflowTaskF[B]] =
@@ -81,7 +81,7 @@ object WorkflowTaskF {
         }
     }
 
-  implicit def WorkflowTaskRenderTree: RenderTree ~> λ[α => RenderTree[WorkflowTaskF[α]]] =
+  implicit def renderTree: RenderTree ~> λ[α => RenderTree[WorkflowTaskF[α]]] =
     new (RenderTree ~> λ[α => RenderTree[WorkflowTaskF[α]]]) {
       def apply[α](ra: RenderTree[α]) = new RenderTree[WorkflowTaskF[α]] {
         val RC = RenderTree[Collection]

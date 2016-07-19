@@ -64,7 +64,19 @@ lazy val commonSettings = Seq(
   scalacOptions in (Test, console) --= Seq(
     "-Yno-imports",
     "-Ywarn-unused-import"),
-  wartremoverErrors in (Compile, compile) ++= warts,
+  wartremoverWarnings in (Compile, compile) ++= Warts.allBut(
+    Wart.Any,
+    Wart.AsInstanceOf,
+    Wart.Equals,
+    Wart.ExplicitImplicitTypes, // - see puffnfresh/wartremover#226
+    Wart.ImplicitConversion,    // - see puffnfresh/wartremover#242
+    Wart.IsInstanceOf,
+    Wart.NoNeedForMonad,        // - see puffnfresh/wartremover#159
+    Wart.Nothing,
+    Wart.Overloading,
+    Wart.Product,               // _ these two are highly correlated
+    Wart.Serializable,          // /
+    Wart.ToString),
   // Normal tests exclude those tagged in Specs2 with 'exclusive'.
   testOptions in Test := Seq(Tests.Argument("exclude", "exclusive")),
   // Exclusive tests include only those tagged with 'exclusive'.
@@ -122,36 +134,6 @@ lazy val noPublishSettings = Seq(
   publishArtifact := false
 )
 
-// Using a Seq of desired warts instead of Warts.allBut due to an incremental compilation issue.
-// https://github.com/puffnfresh/wartremover/issues/202
-// omissions:
-//   Wart.Any
-//   Wart.AsInstanceOf
-//   Wart.ExplicitImplicitTypes - see mpilquist/simulacrum#35
-//   Wart.IsInstanceOf
-//   Wart.NoNeedForMonad        - see puffnfresh/wartremover#159
-//   Wart.Nothing
-//   Wart.Product               _ these two are highly correlated
-//   Wart.Serializable          /
-//   Wart.Throw
-//   Wart.ToString
-val warts = Seq(
-  Wart.Any2StringAdd,
-  Wart.DefaultArguments,
-  Wart.EitherProjectionPartial,
-  Wart.Enumeration,
-  Wart.FinalCaseClass,
-  Wart.JavaConversions,
-  Wart.ListOps,
-  Wart.MutableDataStructures,
-  Wart.NonUnitStatements,
-  Wart.Null,
-  Wart.Option2Iterable,
-  Wart.OptionPartial,
-  Wart.Return,
-  Wart.TryPartial,
-  Wart.Var)
-
 lazy val oneJarSettings =
   com.github.retronym.SbtOneJar.oneJarSettings ++
     commonSettings ++
@@ -170,28 +152,46 @@ lazy val oneJarSettings =
         commitReleaseVersion,
         pushChanges))
 
-//        core
-//        /   \
-// mongodb    «other backends»
-//        \   /
-//        main
-//        /  \
-//    repl    web
-//        \  /
-//         it
-//          |
-//        root
-
-// common components
-
 lazy val root = project.in(file("."))
   .settings(commonSettings: _*)
   .settings(noPublishSettings)
-  .aggregate(core, main, mongodb, repl, web, it)
+  .aggregate(
+        foundation,
+//     / / | | \ \
+//
+          ejson,
+//          |
+          core,
+//        /   \
+   mongodb,    skeleton,
+//        \   /
+          main,
+//        /  \
+      repl,   web,
+//        \  /
+           it)
+  .enablePlugins(AutomateHeaderPlugin)
+
+// common components
+
+lazy val foundation = project
+  .settings(name := "quasar-foundation-internal")
+  .settings(oneJarSettings: _*)
+  .settings(publishSettings: _*)
+  .settings(libraryDependencies ++= Dependencies.core)
+  .enablePlugins(AutomateHeaderPlugin)
+
+lazy val ejson = project
+  .settings(name := "quasar-ejson-internal")
+  .dependsOn(foundation % "test->test;compile->compile")
+  .settings(oneJarSettings: _*)
+  .settings(publishSettings: _*)
+  .settings(libraryDependencies ++= Dependencies.core)
   .enablePlugins(AutomateHeaderPlugin)
 
 lazy val core = project
   .settings(name := "quasar-core-internal")
+  .dependsOn(ejson % "test->test;compile->compile")
   .settings(oneJarSettings: _*)
   .settings(publishSettings: _*)
   .settings(
@@ -205,7 +205,9 @@ lazy val core = project
 
 lazy val main = project
   .settings(name := "quasar-main-internal")
-  .dependsOn(mongodb % "test->test;compile->compile")
+  .dependsOn(
+    mongodb  % "test->test;compile->compile",
+    skeleton % "test->test;compile->compile")
   .settings(oneJarSettings: _*)
   .settings(publishSettings: _*)
   .enablePlugins(AutomateHeaderPlugin)
@@ -217,6 +219,15 @@ lazy val mongodb = project
   .dependsOn(core % "test->test;compile->compile")
   .settings(oneJarSettings: _*)
   .settings(publishSettings: _*)
+  .settings(libraryDependencies +=
+    "org.mongodb" % "mongodb-driver-async" % "3.2.2")
+  .enablePlugins(AutomateHeaderPlugin)
+
+lazy val skeleton = project
+  .settings(name := "quasar-skeleton-internal")
+  .dependsOn(core % "test->test;compile->compile")
+  .settings(oneJarSettings: _*)
+  // .settings(publishSettings: _*) // NB: uncomment this line when you copy it
   .enablePlugins(AutomateHeaderPlugin)
 
 // frontends

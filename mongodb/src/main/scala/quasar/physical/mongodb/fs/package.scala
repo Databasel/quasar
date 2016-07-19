@@ -53,7 +53,7 @@ package object fs {
     defDb: Option[DefaultDb]
   )(implicit
     S0: Task :<: S,
-    S1: MongoErr :<: S
+    S1: PhysErr :<: S
   ): EnvErrT[Task, FileSystem ~> Free[S, ?]] = {
     val runM = Hoist[EnvErrT].hoist(MongoDbIO.runNT(client))
 
@@ -74,7 +74,7 @@ package object fs {
 
   def mongoDbFileSystemDef[S[_]](implicit
     S0: Task :<: S,
-    S1: MongoErr :<: S
+    S1: PhysErr :<: S
   ): FileSystemDef[Free[S, ?]] = FileSystemDef.fromPF[Free[S, ?]] {
     case (MongoDBFsType, uri) =>
       type M[A] = Free[S, A]

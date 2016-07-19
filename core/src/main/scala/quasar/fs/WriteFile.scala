@@ -249,7 +249,6 @@ object WriteFile {
   /** Low-level, unsafe operations. Clients are responsible for resource-safety
     * when using these.
     */
-  @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
   final class Unsafe[S[_]](implicit S: WriteFile :<: S)
     extends LiftedOps[WriteFile, S] {
 

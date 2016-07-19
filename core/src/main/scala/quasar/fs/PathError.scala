@@ -20,7 +20,7 @@ package fs
 import quasar.Predef._
 import quasar.fp._
 
-import monocle.Lens
+import monocle.{Lens, Prism}
 import pathy.Path._
 import scalaz._
 
@@ -35,13 +35,13 @@ object PathError {
       extends PathError
 
   val pathExists =
-    pPrism[PathError, APath] { case PathExists(p) => p } (PathExists)
+    Prism.partial[PathError, APath] { case PathExists(p) => p } (PathExists)
 
   val pathNotFound =
-    pPrism[PathError, APath] { case PathNotFound(p) => p } (PathNotFound)
+    Prism.partial[PathError, APath] { case PathNotFound(p) => p } (PathNotFound)
 
   val invalidPath =
-    pPrism[PathError, (APath, String)] {
+    Prism.partial[PathError, (APath, String)] {
       case InvalidPath(p, r) => (p, r)
     } (InvalidPath.tupled)
 

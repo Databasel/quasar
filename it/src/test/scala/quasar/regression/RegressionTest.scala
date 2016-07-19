@@ -18,10 +18,11 @@ package quasar
 package regression
 
 import quasar.Predef._
-import quasar.fp._, PathyCodecJson._
+import quasar.fp._
 
 import argonaut._, Argonaut._
 import pathy.Path, Path._
+import pathy.argonaut.PosixCodecJson._
 import scalaz._, Scalaz._
 
 case class RegressionTest(

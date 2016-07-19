@@ -42,7 +42,6 @@ object AtomicRef {
   final case class Set[V](v: V) extends AtomicRef[V, Unit]
   final case class CompareAndSet[V](expect: V, update: V) extends AtomicRef[V, Boolean]
 
-  @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
   final class Ops[V, S[_]](implicit S: AtomicRef[V, ?] :<: S)
     extends LiftedOps[AtomicRef[V, ?], S] {
 

@@ -23,6 +23,7 @@ import quasar.fp._
 
 import argonaut.JsonObject
 import matryoshka._
+import monocle.Prism
 import pathy.Path.posixCodec
 import scalaz._
 import scalaz.syntax.show._
@@ -38,7 +39,7 @@ object FileSystemError {
     lp: Fix[LogicalPlan],
     reason: String,
     detail: JsonObject,
-    cause: Option[Throwable]
+    cause: Option[PhysicalError]
   ) extends FileSystemError
   final case class PathErr private (e: PathError)
     extends FileSystemError
@@ -57,45 +58,45 @@ object FileSystemError {
   final case class WriteFailed private (data: Data, reason: String)
     extends FileSystemError
 
-  val executionFailed = pPrism[FileSystemError, (Fix[LogicalPlan], String, JsonObject, Option[Throwable])] {
+  val executionFailed = Prism.partial[FileSystemError, (Fix[LogicalPlan], String, JsonObject, Option[PhysicalError])] {
     case ExecutionFailed(lp, rsn, det, cs) => (lp, rsn, det, cs)
   } (ExecutionFailed.tupled)
 
   def executionFailed_(lp: Fix[LogicalPlan], reason: String): FileSystemError =
     executionFailed(lp, reason, JsonObject.empty, None)
 
-  val pathErr = pPrism[FileSystemError, PathError] {
+  val pathErr = Prism.partial[FileSystemError, PathError] {
     case PathErr(err) => err
   } (PathErr)
 
-  val planningFailed = pPrism[FileSystemError, (Fix[LogicalPlan], PlannerError)] {
+  val planningFailed = Prism.partial[FileSystemError, (Fix[LogicalPlan], PlannerError)] {
     case PlanningFailed(lp, e) => (lp, e)
   } (PlanningFailed.tupled)
 
-  val unknownResultHandle = pPrism[FileSystemError, ResultHandle] {
+  val unknownResultHandle = Prism.partial[FileSystemError, ResultHandle] {
     case UnknownResultHandle(h) => h
   } (UnknownResultHandle)
 
-  val unknownReadHandle = pPrism[FileSystemError, ReadHandle] {
+  val unknownReadHandle = Prism.partial[FileSystemError, ReadHandle] {
     case UnknownReadHandle(h) => h
   } (UnknownReadHandle)
 
-  val unknownWriteHandle = pPrism[FileSystemError, WriteHandle] {
+  val unknownWriteHandle = Prism.partial[FileSystemError, WriteHandle] {
     case UnknownWriteHandle(h) => h
   } (UnknownWriteHandle)
 
-  val partialWrite = pPrism[FileSystemError, Int] {
+  val partialWrite = Prism.partial[FileSystemError, Int] {
     case PartialWrite(n) => n
   } (PartialWrite)
 
-  val writeFailed = pPrism[FileSystemError, (Data, String)] {
+  val writeFailed = Prism.partial[FileSystemError, (Data, String)] {
     case WriteFailed(d, r) => (d, r)
   } (WriteFailed.tupled)
 
   implicit def fileSystemErrorShow: Show[FileSystemError] =
     Show.shows {
       case ExecutionFailed(_, rsn, _, c) =>
-        s"Plan execution failed: $rsn, cause=${c.map(_.getMessage)}"
+        s"Plan execution failed: $rsn, cause=${c.map(_.cause.getMessage)}"
       case PathErr(e) =>
         e.shows
       case PlanningFailed(_, e) =>

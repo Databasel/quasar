@@ -23,7 +23,6 @@ import quasar.api.matchers._
 import quasar.effect.KeyValueStore
 import quasar.fp.liftMT
 import quasar.fp.free, free._
-import quasar.fp.prism._
 import quasar.fs._, InMemory._, PathArbitrary._
 import quasar.fs.mount._
 import quasar.sql._

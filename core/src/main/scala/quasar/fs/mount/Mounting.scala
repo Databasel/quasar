@@ -63,7 +63,6 @@ object Mounting {
       }
   }
 
-  @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
   final class Ops[S[_]](implicit S: Mounting :<: S)
     extends LiftedOps[Mounting, S] {
 

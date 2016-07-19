@@ -20,6 +20,7 @@ import quasar.Predef._
 import quasar.fp._
 import quasar.physical.mongodb.accumulator._
 import quasar.physical.mongodb.expression._
+import quasar.qscript._
 
 import scalaz._, Scalaz._
 
@@ -38,7 +39,7 @@ private[mongodb] object execution {
   final case class Find(
     query:      Option[Selector],
     projection: Option[Bson.Doc],
-    sort:       Option[NonEmptyList[(BsonField, SortType)]],
+    sort:       Option[NonEmptyList[(BsonField, SortDir)]],
     skip:       Option[Long],
     limit:      Option[Long])
 

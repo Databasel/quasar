@@ -79,7 +79,7 @@ abstract class QueryRegressionTest[S[_]](
   def suiteName: String
 
   /** Return the results of evaluating the given query as a stream. */
-  def queryResults(expr: Fix[Sql], vars: Variables): Process[CompExecM, Data]
+  def queryResults(expr: Fix[Sql], vars: Variables, basePath: ADir): Process[CompExecM, Data]
 
   ////
 
@@ -107,7 +107,6 @@ abstract class QueryRegressionTest[S[_]](
     run: Run
   ): Fragment = {
     def runTest = (for {
-      _    <- Task.delay(println(test.query))
       _    <- run(test.data.traverse[F,Result](
                 relFile => injectTask(resolveData(loc, relFile).fold(
                           err => Task.fail(new RuntimeException(err)),
@@ -176,10 +175,11 @@ abstract class QueryRegressionTest[S[_]](
       toCompExec compose injectTask
 
     val parseTask: Task[Fix[Sql]] =
-      sql.fixParser.parseInContext(Query(qry), loc)
-        .fold(e => Task.fail(new RuntimeException(e.message)), _.point[Task])
+      sql.fixParser.parse(Query(qry))
+        .fold(e => Task.fail(new RuntimeException(e.message)),
+        _.mkPathsAbsolute(loc).point[Task])
 
-    f(parseTask).liftM[Process] flatMap (queryResults(_, Variables.fromMap(vars)))
+    f(parseTask).liftM[Process] flatMap (queryResults(_, Variables.fromMap(vars), loc))
   }
 
   /** Loads all the test data needed by the given tests into the filesystem. */

@@ -114,9 +114,8 @@ class ZipSpecs extends Specification with ScalaCheck with ScalazMatchers {
     "zip many large files of random bytes (100 MB)" in {
       // NB: this is mainly a performance check. Right now it's about 2 seconds for 100 MB for me.
       val Files = 100
-      val RawSize = Files*1000*1000L
-      val MinExpectedSize = (RawSize*0.005).toInt
-      val MaxExpectedSize = (RawSize*0.010).toInt
+      val MaxExpectedSize = 1000*1000
+      val MinExpectedSize = MaxExpectedSize / 2
 
       val paths = (0 until Files).toList.map(i => file[Sandboxed]("foo" + i))
       val z = zipFiles(paths.map(_ -> f4))
@@ -130,9 +129,8 @@ class ZipSpecs extends Specification with ScalaCheck with ScalazMatchers {
       skipped("too slow to run every time (~2 minutes)")
 
       val Files = 10*1000
-      val RawSize = Files*1000*1000L
-      val MinExpectedSize = (RawSize*0.005).toInt
-      val MaxExpectedSize = (RawSize*0.010).toInt
+      val MaxExpectedSize = 100*1000*1000
+      val MinExpectedSize = MaxExpectedSize / 2
 
       val paths = (0 until Files).toList.map(i => file[Sandboxed]("foo" + i))
       val z = zipFiles(paths.map(_ -> f4))

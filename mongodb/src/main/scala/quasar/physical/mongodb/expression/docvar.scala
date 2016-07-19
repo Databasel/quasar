@@ -20,16 +20,10 @@ import quasar.Predef._
 import quasar.jscore, jscore.JsFn
 import quasar.physical.mongodb.{Bson, BsonField}
 
+import scala.Some
+
 import scalaz._, Scalaz._
 
-object DocField {
-  def apply(field: BsonField): DocVar = DocVar.ROOT(field)
-
-  def unapply(docVar: DocVar): Option[BsonField] = docVar match {
-    case DocVar.ROOT(tail) => tail
-    case _ => None
-  }
-}
 final case class DocVar(name: DocVar.Name, deref: Option[BsonField]) {
   def path: List[BsonField.Name] = deref.toList.flatMap(_.flatten.toList)
 
@@ -79,11 +73,10 @@ object DocVar {
 
     def apply(field: BsonField) = DocVar(this, Some(field))
 
-    def apply(deref: Option[BsonField]) = DocVar(this, deref)
-
     def apply(leaves: List[BsonField.Name]) = DocVar(this, BsonField(leaves))
 
-    def unapply(v: DocVar): Option[Option[BsonField]] = Some(v.deref)
+    def apply(deref: Option[BsonField]) = DocVar(this, deref)
+    def unapply(v: DocVar): Some[Option[BsonField]] = Some(v.deref)
   }
   val ROOT    = Name("ROOT")
   val CURRENT = Name("CURRENT")

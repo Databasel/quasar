@@ -20,7 +20,6 @@ import quasar.Predef.{Unit, String}
 import quasar.effect.AtomicRef
 import quasar.fs.{ADir, FileSystemType, PathError}
 import quasar.fp.free
-import quasar.fp.prism._
 
 import scalaz._
 import scalaz.syntax.monad._

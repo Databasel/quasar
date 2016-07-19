@@ -25,6 +25,7 @@ import quasar.jscore, jscore.{JsCore, JsFn}
 import quasar.physical.mongodb.javascript._
 
 import matryoshka._, Recursive.ops._
+import monocle.Prism
 import org.threeten.bp.Instant
 import scalaz._, Scalaz._
 
@@ -37,6 +38,10 @@ package object expression {
 
   val $$ROOT = $var(DocVar.ROOT())
   val $$CURRENT = $var(DocVar.CURRENT())
+
+  val DocField = Prism.partial[DocVar, BsonField] {
+    case DocVar.ROOT(Some(tail)) => tail
+  } (DocVar.ROOT(_))
 
   def bsonDoc(op: String, rhs: Bson) = Bson.Doc(ListMap(op -> rhs))
   private def bsonArr(op: String, elems: Bson*) =

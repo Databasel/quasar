@@ -50,7 +50,6 @@ object KeyValueStore {
   final case class Delete[K, V](k: K)
     extends KeyValueStore[K, V, Unit]
 
-  @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
   final class Ops[K, V, S[_]](implicit S: KeyValueStore[K, V, ?] :<: S)
     extends LiftedOps[KeyValueStore[K, V, ?], S] {
 

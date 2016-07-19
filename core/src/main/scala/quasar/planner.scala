@@ -21,6 +21,7 @@ import quasar.fp._
 import quasar.fs.PathError
 
 import matryoshka._
+import monocle.Prism
 import scalaz._, Scalaz._
 
 object Planner {
@@ -29,6 +30,10 @@ object Planner {
   }
 
   final case class NonRepresentableData(data: Data) extends PlannerError {
+    def message = "The back-end has no representation for the constant: " + data
+  }
+  final case class NonRepresentableEJson(data: String)
+      extends PlannerError {
     def message = "The back-end has no representation for the constant: " + data
   }
   final case class UnsupportedFunction(name: String, hint: Option[String]) extends PlannerError {
@@ -88,33 +93,19 @@ object Planner {
     }
   }
 
-  object CompilePathError {
-    def apply(error: PathError): CompilationError =
-      CompilationError.CompilePathError(error)
-    def unapply(obj: CompilationError): Option[PathError] = obj match {
-      case CompilationError.CompilePathError(error) => Some(error)
-      case _                             => None
-    }
-  }
-  object CSemanticError {
-    def apply(error: SemanticError): CompilationError = CompilationError.CSemanticError(error)
-    def unapply(obj: CompilationError): Option[SemanticError] = obj match {
-      case CompilationError.CSemanticError(error) => Some(error)
-      case _                             => None
-    }
-  }
-  object CPlannerError {
-    def apply(error: PlannerError): CompilationError = CompilationError.CPlannerError(error)
-    def unapply(obj: CompilationError): Option[PlannerError] = obj match {
-      case CompilationError.CPlannerError(error) => Some(error)
-      case _                             => None
-    }
-  }
-  object ManyErrors {
-    def apply(error: NonEmptyList[SemanticError]): CompilationError = CompilationError.ManyErrors(error)
-    def unapply(obj: CompilationError): Option[NonEmptyList[SemanticError]] = obj match {
-      case CompilationError.ManyErrors(error) => Some(error)
-      case _                             => None
-    }
-  }
+  val CompilePathError = Prism.partial[CompilationError, PathError] {
+    case CompilationError.CompilePathError(error) => error
+  } (CompilationError.CompilePathError(_))
+
+  val CSemanticError = Prism.partial[CompilationError, SemanticError] {
+    case CompilationError.CSemanticError(error) => error
+  } (CompilationError.CSemanticError(_))
+
+  val CPlannerError = Prism.partial[CompilationError, PlannerError] {
+    case CompilationError.CPlannerError(error) => error
+  } (CompilationError.CPlannerError(_))
+
+  val ManyErrors = Prism.partial[CompilationError, NonEmptyList[SemanticError]] {
+    case CompilationError.ManyErrors(error) => error
+  } (CompilationError.ManyErrors(_))
 }

@@ -26,8 +26,7 @@ import scalaz.syntax.functor._
 /** A source of strings unique within `F[_]`, an implementation must have the
   * property that, if Applicative[F], then (freshName |@| freshName)(_ != _).
   */
-@typeclass
-trait NameGenerator[F[_]] {
+@typeclass trait NameGenerator[F[_]] {
   /** Returns a fresh name, guaranteed to be unique among all the other names
     * generated from `F`.
     */

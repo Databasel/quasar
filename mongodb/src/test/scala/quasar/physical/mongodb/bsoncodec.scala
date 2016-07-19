@@ -17,16 +17,14 @@
 package quasar.physical.mongodb
 
 import quasar.Predef._
-
-import org.specs2.mutable._
-import org.specs2.scalaz._
-import org.specs2.ScalaCheck
+import quasar._
 
 import scala.collection.immutable.ListMap
 
+import org.specs2.ScalaCheck
+import org.specs2.mutable._
+import org.specs2.scalaz._
 import scalaz._
-
-import quasar._
 
 class BsonCodecSpecs extends Specification with ScalaCheck with DisjunctionMatchers {
   import BsonCodec._
@@ -52,14 +50,14 @@ class BsonCodecSpecs extends Specification with ScalaCheck with DisjunctionMatch
       import Data._
 
       def preserved(d: Data): Boolean = d match {
-        case Int(x)      => x.isValidLong
-        case Interval(_) => false
-        case Date(_)     => false
-        case Time(_)     => false
-        case Set(_)      => false
-        case Arr(value)  => value.forall(preserved)
-        case Obj(value)  => value.values.forall(preserved)
-        case _ => true
+        case Int(x)           => x.isValidLong
+        case Interval(_)      => false
+        case Date(_)          => false
+        case Time(_)          => false
+        case Set(_)           => false
+        case Arr(value)       => value.forall(preserved)
+        case Obj(value)       => value.values.forall(preserved)
+        case _                => true
       }
 
       preserved(data) ==> {

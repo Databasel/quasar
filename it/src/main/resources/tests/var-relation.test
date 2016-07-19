@@ -1,0 +1,17 @@
+{
+  "name": "select from a table named by a variable",
+
+  "data": "smallZips.data",
+
+  "variables": {
+    "table": "`smallZips`"
+  },
+
+  "query": "select count(*) from :table where pop < 1000",
+
+  "predicate": "equalsExactly",
+
+  "expected": [
+    { "0": 19 }
+  ]
+}

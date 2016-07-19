@@ -17,7 +17,6 @@
 package quasar.sql
 
 import quasar.Predef._
-import quasar.fp._
 
 import scala.Any
 
@@ -208,10 +207,20 @@ sealed trait SqlRelation[A] {
 
   def mapPathsM[F[_]: Monad](f: FUPath => F[FUPath]): F[SqlRelation[A]] = this match {
     case IdentRelationAST(_, _) => this.point[F]
+    case VariRelationAST(_, _) => this.point[F]
     case TableRelationAST(path, alias) => f(path).map(TableRelationAST(_, alias))
     case rel @ JoinRelation(left, right, _, _) =>
       (left.mapPathsM(f) |@| right.mapPathsM(f))((l,r) => rel.copy(left = l, right = r))
     case ExprRelationAST(_,_) => this.point[F]
+  }
+
+  def transformM[F[_]: Monad, B](f: SqlRelation[A] => F[SqlRelation[B]], g: A => F[B]): F[SqlRelation[B]] = this match {
+    case JoinRelation(left, right, tpe, clause) =>
+      (left.transformM[F, B](f, g) |@|
+        right.transformM[F, B](f, g) |@|
+        g(clause))((l,r,c) =>
+          JoinRelation(l, r, tpe, c))
+    case rel => f(rel)
   }
 }
 
@@ -229,6 +238,12 @@ sealed trait NamedRelation[A] extends SqlRelation[A] {
     extends NamedRelation[A] {
   def aliasName = alias.getOrElse(name)
 }
+
+@Lenses final case class VariRelationAST[A](vari: Vari[A], alias: Option[String])
+    extends NamedRelation[A] {
+  def aliasName = alias.getOrElse(vari.symbol)
+}
+
 
 @Lenses final case class TableRelationAST[A](tablePath: FUPath, alias: Option[String])
     extends NamedRelation[A] {

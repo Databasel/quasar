@@ -30,8 +30,10 @@ import org.http4s.HttpService
 import org.http4s.server._
 import org.http4s.server.syntax._
 import scalaz._
+import scalaz.std.list._
 import scalaz.std.option._
 import scalaz.std.string._
+import scalaz.syntax.foldable._
 import scalaz.syntax.monad._
 import scalaz.syntax.std.option._
 import scalaz.concurrent.Task
@@ -45,9 +47,12 @@ object Server {
     openClient: Boolean)
 
   object QuasarConfig {
-    def fromArgs(args: Array[String]): MainTask[QuasarConfig] = for {
-      opts    <- CliOptions.parser.parse(args, CliOptions.default)
-                  .cata(_.point[MainTask], MainTask.raiseError("couldn't parse options"))
+    def fromArgs(args: Array[String]): MainTask[QuasarConfig] =
+      CliOptions.parser.parse(args, CliOptions.default)
+        .cata(_.point[MainTask], MainTask.raiseError("couldn't parse options"))
+        .flatMap(fromCliOptions)
+
+    def fromCliOptions(opts: CliOptions): MainTask[QuasarConfig] = for {
       content <- StaticContent.fromCliOptions("/files", opts)
       redirect = content.map(_.loc)
       cfgPath <- opts.config.fold(none[FsFile].point[MainTask])(cfg =>
@@ -104,9 +109,8 @@ object Server {
     import RestApi._
 
     (reload: Int => Task[Unit]) =>
-      finalizeServices(eval)(
-        coreServices[CoreEff],
-        additionalServices
+      finalizeServices(
+        toHttpServices(eval, coreServices[CoreEff]) ++ additionalServices
       ) orElse nonApiService(initialPort, reload, staticContent, redirect)
   }
 
@@ -119,10 +123,12 @@ object Server {
     for {
       cfgRef       <- TaskRef(webConfig).liftM[MainErrT]
       mntCfgsT     =  writeConfig(WebConfig.mountings, cfgRef, qConfig.configPath)
-      coreApi      <- CoreEff.interpreter[WebConfig](mntCfgsT).liftM[MainErrT]
-      ephemeralApi =  foldMapNT(CfgsErrsIO.toMainTask(MntCfgsIO.ephemeral)) compose coreApi
-      _            <- (mountAll[CoreEff](webConfig.mountings) foldMap ephemeralApi).flatMapF(_.point[Task])
-      durableApi   =  foldMapNT(toResponseOr(MntCfgsIO.durable[WebConfig](mntCfgsT))) compose coreApi
+      coreApi      <- CoreEff.interpreter.liftM[MainErrT]
+      ephemeralApi =  foldMapNT(CfgsErrsIO.toMainTask(ephemeralMountConfigs[Task])) compose coreApi
+      failedMnts   <- attemptMountAll[CoreEff](webConfig.mountings) foldMap ephemeralApi
+      // TODO: Still need to expose these in the HTTP API, see SD-1131
+      _            <- failedMnts.toList.traverse_(logFailedMount).liftM[MainErrT]
+      durableApi   =  foldMapNT(toResponseOr(mntCfgsT)) compose coreApi
     } yield service(
       webConfig.server.port,
       qConfig.staticContent,

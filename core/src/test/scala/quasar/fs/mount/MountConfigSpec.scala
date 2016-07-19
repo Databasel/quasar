@@ -18,7 +18,6 @@ package quasar.fs.mount
 
 import quasar.Predef._
 import quasar.{Variables, VarName, VarValue}
-import quasar.fp.prism._
 import quasar.sql
 import quasar.sql.fixpoint._
 

@@ -123,13 +123,15 @@ object Http4sUtils {
 
   /** Produce a stream of servers that can be restarted on a supplied port
     * @param initialPort The port on which to start the initial server
-    * @param produceService A function that given a function to restart a server on a new port,
-    *                       returns an `HttpService`
-    * @return The `Task` will start the first server and provide a function to shutdown the active server.
-    *         It will also return a process of servers and ports. This `Process` must be run in order for servers
-    *         to actually be started and stopped. The `Process` must be run to completion in order for appropriate
-    *         clean up to occur.
+    * @param produceService A function that given a function to restart a server
+    *                       on a new port, returns an `HttpService`
+    * @return The `Task` will start the first server and provide a function to
+    *         shutdown the active server. It will also return a process of
+    *         servers and ports. This `Process` must be run in order for
+    *         servers to actually be started and stopped. The `Process` must be
+    *         run to completion in order for appropriate clean up to occur.
     */
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def startServers(
     initialPort: Int,
     produceService: (Int => Task[Unit]) => HttpService

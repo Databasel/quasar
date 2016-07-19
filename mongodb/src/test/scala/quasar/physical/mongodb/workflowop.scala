@@ -21,6 +21,7 @@ import quasar.RenderTree
 import quasar.TreeMatchers
 import quasar.fp._
 import quasar.javascript._
+import quasar.qscript._
 
 import matryoshka.Fix
 import org.scalacheck._
@@ -65,14 +66,14 @@ class WorkflowSpec extends Specification with TreeMatchers {
     "put match before sort" in {
       val given = chain(
         readFoo,
-        $sort(NonEmptyList(BsonField.Name("city") -> Descending)),
+        $sort(NonEmptyList(BsonField.Name("city") -> SortDir.Descending)),
         $match(Selector.Doc(
           BsonField.Name("pop") -> Selector.Gte(Bson.Int64(1000)))))
       val expected = chain(
         readFoo,
         $match(Selector.Doc(
           BsonField.Name("pop") -> Selector.Gte(Bson.Int64(1000)))),
-        $sort(NonEmptyList(BsonField.Name("city") -> Descending)))
+        $sort(NonEmptyList(BsonField.Name("city") -> SortDir.Descending)))
 
       given must beTree(expected)
     }
@@ -616,7 +617,7 @@ class WorkflowSpec extends Specification with TreeMatchers {
           IncludeId),
         $match(Selector.Doc(
           BsonField.Name("equal?") -> Selector.Eq(Bson.Bool(true)))),
-        $sort(NonEmptyList(BsonField.Name("a") -> Descending)),
+        $sort(NonEmptyList(BsonField.Name("a") -> SortDir.Descending)),
         $limit(100),
         $skip(5),
         $project(Reshape(ListMap(
@@ -639,7 +640,7 @@ class WorkflowSpec extends Specification with TreeMatchers {
             $Match((),
               Selector.Doc(
                 BsonField.Name("equal?") -> Selector.Eq(Bson.Bool(true)))),
-            $Sort((), NonEmptyList(BsonField.Name("a") -> Descending)),
+            $Sort((), NonEmptyList(BsonField.Name("a") -> SortDir.Descending)),
             $Limit((), 100),
             $Skip((), 5),
             $Project((),
@@ -655,7 +656,7 @@ class WorkflowSpec extends Specification with TreeMatchers {
         $match(Selector.Doc(
           BsonField.Name("loc") \ BsonField.Name("0") ->
             Selector.Lt(Bson.Int64(-73)))),
-        $sort(NonEmptyList(BsonField.Name("city") -> Descending)),
+        $sort(NonEmptyList(BsonField.Name("city") -> SortDir.Descending)),
         $limit(100),
         $map($Map.mapMap("value",
           Js.Access(Js.Ident("value"), Js.Num(0, false))),
@@ -673,7 +674,7 @@ class WorkflowSpec extends Specification with TreeMatchers {
               BsonField.Name("loc") \ BsonField.Name("0") ->
                 Selector.Lt(Bson.Int64(-73)))),
             inputSort =
-              Some(NonEmptyList(BsonField.Name("city") -> Descending)),
+              Some(NonEmptyList(BsonField.Name("city") -> SortDir.Descending)),
             limit = Some(100),
             finalizer = Some($Map.finalizerFn($Map.mapMap("value",
               Js.Ident("value"))))),
@@ -686,7 +687,7 @@ class WorkflowSpec extends Specification with TreeMatchers {
         $match(Selector.Doc(
           BsonField.Name("loc") \ BsonField.Name("0") ->
             Selector.Lt(Bson.Int64(-73)))),
-        $sort(NonEmptyList(BsonField.Name("city") -> Descending)),
+        $sort(NonEmptyList(BsonField.Name("city") -> SortDir.Descending)),
         $limit(100),
         $flatMap(Js.AnonFunDecl(List("key", "value"), List(
           Js.AnonElem(List(
@@ -706,7 +707,7 @@ class WorkflowSpec extends Specification with TreeMatchers {
               BsonField.Name("loc") \ BsonField.Name("0") ->
                 Selector.Lt(Bson.Int64(-73)))),
             inputSort =
-              Some(NonEmptyList(BsonField.Name("city") -> Descending)),
+              Some(NonEmptyList(BsonField.Name("city") -> SortDir.Descending)),
             limit = Some(100),
             finalizer = Some($Map.finalizerFn($Map.mapMap("value",
               Js.Ident("value"))))),
@@ -719,7 +720,7 @@ class WorkflowSpec extends Specification with TreeMatchers {
         $match(Selector.Doc(
           BsonField.Name("loc") \ BsonField.Name("0") ->
             Selector.Lt(Bson.Int64(-73)))),
-        $sort(NonEmptyList(BsonField.Name("city") -> Descending)),
+        $sort(NonEmptyList(BsonField.Name("city") -> SortDir.Descending)),
         $limit(100),
         $reduce($Reduce.reduceFoldLeft, ListMap()),
         $map($Map.mapMap("value", Js.Ident("value")), ListMap())))) must
@@ -733,7 +734,7 @@ class WorkflowSpec extends Specification with TreeMatchers {
               BsonField.Name("loc") \ BsonField.Name("0") ->
                 Selector.Lt(Bson.Int64(-73)))),
             inputSort =
-              Some(NonEmptyList(BsonField.Name("city") -> Descending)),
+              Some(NonEmptyList(BsonField.Name("city") -> SortDir.Descending)),
             limit = Some(100),
             finalizer = Some($Map.finalizerFn($Map.mapMap("value",
               Js.Ident("value"))))),

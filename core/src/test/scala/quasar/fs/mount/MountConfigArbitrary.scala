@@ -18,7 +18,6 @@ package quasar.fs.mount
 
 import quasar.Variables
 import quasar.VariablesArbitrary._
-import quasar.fp.prism._
 import quasar.fs._, FileSystemTypeArbitrary._
 import quasar.sql._, ExprArbitrary._
 

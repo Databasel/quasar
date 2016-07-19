@@ -55,15 +55,15 @@ object ManageFile {
       */
     case object FailIfMissing extends MoveSemantics
 
-    val overwrite = pPrism[MoveSemantics, Unit] {
+    val overwrite = Prism.partial[MoveSemantics, Unit] {
       case Overwrite => ()
     } (κ(Overwrite))
 
-    val failIfExists = pPrism[MoveSemantics, Unit] {
+    val failIfExists = Prism.partial[MoveSemantics, Unit] {
       case FailIfExists => ()
     } (κ(FailIfExists))
 
-    val failIfMissing = pPrism[MoveSemantics, Unit] {
+    val failIfMissing = Prism.partial[MoveSemantics, Unit] {
       case FailIfMissing => ()
     } (κ(FailIfMissing))
   }
@@ -107,7 +107,6 @@ object ManageFile {
   final case class TempFile(near: APath)
     extends ManageFile[FileSystemError \/ AFile]
 
-  @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
   final class Ops[S[_]](implicit S: ManageFile :<: S)
     extends LiftedOps[ManageFile, S] {
 

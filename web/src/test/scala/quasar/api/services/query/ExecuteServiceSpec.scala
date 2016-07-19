@@ -46,11 +46,7 @@ import org.specs2.scalaz.ScalazMatchers._
 import pathy.Path._
 import pathy.scalacheck.{AbsFileOf, RelFileOf}
 import pathy.scalacheck.PathyArbitrary._
-// Would like to use the argonaut backend, but that's not possible
-// yet because rapture is still on argonaut 6.1 and we are using
-// 6.2-M1. So using another rapture "backend" and printing/parsing
-// in order to do conversions without depending on the argonaut backend
-// that rapture provides.
+// TODO: Consider if possible to use argonaut backend and avoid printing followed by parsing
 import rapture.json._, jsonBackends.json4s._, patternMatching.exactObjects._
 import scalaz._, Scalaz._
 import scalaz.concurrent.Task
@@ -128,7 +124,7 @@ class ExecuteServiceSpec extends Specification with FileSystemFixture with Scala
   def toLP(q: String, vars: Variables): Fix[LogicalPlan] =
       sql.fixParser.parse(sql.Query(q)).fold(
         error => scala.sys.error(s"could not compile query: $q due to error: $error"),
-        ast => quasar.queryPlan(ast, vars, 0L, None).run.value.toOption.get).valueOr(_ => scala.sys.error("unsupported constant plan"))
+        ast => quasar.queryPlan(ast, vars, rootDir, 0L, None).run.value.toOption.get).valueOr(_ => scala.sys.error("unsupported constant plan"))
 
   "Execute" should {
     "execute a simple query" >> {
@@ -264,7 +260,7 @@ class ExecuteServiceSpec extends Specification with FileSystemFixture with Scala
           err => scala.sys.error("Parse failed: " + err.toString))
 
         val phases: PhaseResults =
-          queryPlan(expr, Variables.empty, 0L, None).run.written
+          queryPlan(expr, Variables.empty, rootDir, 0L, None).run.written
 
         post[ApiError](fileSystem)(
           path = fs.parent,
@@ -285,7 +281,7 @@ class ExecuteServiceSpec extends Specification with FileSystemFixture with Scala
           err => scala.sys.error("Parse failed: " + err.toString))
 
         val phases: PhaseResults =
-          queryPlan(expr, Variables.empty, 0L, None).run.written
+          queryPlan(expr, Variables.empty, rootDir, 0L, None).run.written
 
         post[ApiError](failingExecPlan(msg, fileSystem))(
           path = rootDir,

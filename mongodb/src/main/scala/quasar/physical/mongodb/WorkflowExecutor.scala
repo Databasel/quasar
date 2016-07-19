@@ -19,7 +19,6 @@ package quasar.physical.mongodb
 import quasar.Predef._
 import quasar.{EnvironmentError, EnvErrT, SeqNameGeneratorT}
 import quasar.{NameGenerator => QNameGenerator, _}
-import quasar.fp.prism._
 import quasar.fs.DataCursor
 import quasar.javascript._
 import quasar.physical.mongodb.workflowtask._

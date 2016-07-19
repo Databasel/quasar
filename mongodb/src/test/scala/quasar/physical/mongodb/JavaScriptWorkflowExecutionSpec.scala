@@ -20,6 +20,7 @@ import quasar.Predef._
 import quasar.javascript._
 import quasar.physical.mongodb.accumulator._
 import quasar.physical.mongodb.expression._
+import quasar.qscript._
 
 import scala.collection.immutable.ListMap
 
@@ -180,7 +181,7 @@ class JavaScriptWorkflowExecutionSpec extends Specification with DisjunctionMatc
           BsonField.Name("pop") -> Selector.Lte(Bson.Int64(1000)))),
         $match(Selector.Doc(
           BsonField.Name("pop") -> Selector.Gte(Bson.Int64(100)))),
-        $sort(NonEmptyList(BsonField.Name("city") -> Ascending)))
+        $sort(NonEmptyList(BsonField.Name("city") -> SortDir.Ascending)))
 
       toJS(wf) must beRightDisjunction(
         """db.zips.find(
@@ -204,7 +205,7 @@ class JavaScriptWorkflowExecutionSpec extends Specification with DisjunctionMatc
           Grouped(ListMap(
             BsonField.Name("pop") -> $sum($field("pop")))),
           $field("city").right),
-        $sort(NonEmptyList(BsonField.Name("_id") -> Ascending)))
+        $sort(NonEmptyList(BsonField.Name("_id") -> SortDir.Ascending)))
 
       toJS(wf) must beRightDisjunction(
         """db.zips.aggregate(

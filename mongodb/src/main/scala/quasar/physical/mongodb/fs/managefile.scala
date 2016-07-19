@@ -19,11 +19,10 @@ package quasar.physical.mongodb.fs
 import quasar.Predef._
 import quasar.NameGenerator
 import quasar.fp.TaskRef
-import quasar.fp.prism._
 import quasar.fs._
 import quasar.physical.mongodb._
 
-import com.mongodb.{MongoCommandException, MongoServerException}
+import com.mongodb.{MongoException, MongoCommandException, MongoServerException}
 import com.mongodb.async.client.MongoClient
 import pathy.Path._
 import scalaz._, Scalaz._
@@ -56,11 +55,19 @@ object managefile {
           .run.liftM[ManageInT]
 
       case TempFile(path) =>
-        EitherT.fromDisjunction[MongoManage](Collection.dbNameFromPath(path))
-          .leftMap(pathErr(_))
-          .flatMap(db => freshName.liftM[FileSystemErrT] map (n =>
-            rootDir[Sandboxed] </> dir1(Collection.dirNameFromDbName(db)) </> file(n)))
-          .run
+        val checkPath =
+          EitherT.fromDisjunction[MongoManage](Collection.dbNameFromPath(path))
+            .leftMap(pathErr(_))
+            .void
+
+        val mkTemp =
+          freshName.liftM[FileSystemErrT] map { n =>
+            refineType(path).fold(
+              _ </> file(n),
+              f => fileParent(f) </> file(n))
+          }
+
+        (checkPath *> mkTemp).run
     }
   }
 
@@ -69,7 +76,7 @@ object managefile {
     client: MongoClient
   )(implicit
     S0: Task :<: S,
-    S1: MongoErr :<: S
+    S1: PhysErr :<: S
   ): Task[MongoManage ~> Free[S, ?]] =
     (tmpPrefix |@| TaskRef(0L)) { (prefix, ref) =>
       new (MongoManage ~> Free[S, ?]) {
@@ -87,13 +94,20 @@ object managefile {
   }
 
   private def moveDir(src: ADir, dst: ADir, sem: MoveSemantics): MongoFsM[Unit] = {
+    // TODO: Need our own error type instead of reusing the one from the driver.
+    def filesMismatchError(srcs: Vector[AFile], dsts: Vector[AFile]): MongoException = {
+      val pp = posixCodec.printPath _
+      new MongoException(
+        s"Mismatched files when moving '${pp(src)}' to '${pp(dst)}': srcFiles = ${srcs map pp}, dstFiles = ${dsts map pp}")
+    }
+
     def moveAllUserCollections = for {
       colls    <- userCollectionsInDir(src)
       srcFiles =  colls map (_.asFile)
       dstFiles =  srcFiles.map(_ relativeTo (src) map (dst </> _)).unite
-      _        <- srcFiles zip dstFiles traverse {
-                    case (s, d) => moveFile(s, d, sem)
-                  }
+      _        <- srcFiles.alignBoth(dstFiles).sequence.cata(
+                    _.traverse { case (s, d) => moveFile(s, d, sem) },
+                    MongoDbIO.fail(filesMismatchError(srcFiles, dstFiles)).liftM[FileSystemErrT])
     } yield ()
 
     if (src === dst)
@@ -145,7 +159,7 @@ object managefile {
                 .map(_.toRightDisjunction(pathErr(pathNotFound(dst))).void))
 
     if (src === dst)
-      collFromPathM(src) flatMap (srcColl =>
+      collFromFileM(src) flatMap (srcColl =>
         collectionExists(srcColl).liftM[FileSystemErrT].ifM(
           if (MoveSemantics.failIfExists isMatching sem)
             MonadError[MongoFsM, FileSystemError].raiseError(pathErr(pathExists(src)))
@@ -155,8 +169,8 @@ object managefile {
           MonadError[MongoFsM, FileSystemError].raiseError(pathErr(pathNotFound(src)))))
     else
       for {
-        srcColl <- collFromPathM(src)
-        dstColl <- collFromPathM(dst)
+        srcColl <- collFromFileM(src)
+        dstColl <- collFromFileM(dst)
         rSem    =  moveToRename(sem)
         _       <- if (MoveSemantics.failIfMissing isMatching sem)
                      ensureDstExists(dstColl)
@@ -185,7 +199,7 @@ object managefile {
     }
 
   private def deleteFile(file: AFile): MongoFsM[Unit] =
-    collFromPathM(file) flatMap (c =>
+    collFromFileM(file) flatMap (c =>
       collectionExists(c).liftM[FileSystemErrT].ifM(
         dropCollection(c).liftM[FileSystemErrT],
         pathErr(pathNotFound(file)).raiseError[MongoFsM, Unit]))

@@ -21,7 +21,6 @@ import quasar.{EnvErr, EnvironmentError}
 import quasar.config._
 import quasar.effect.Failure
 import quasar.fp.free
-import quasar.fp.prism._
 import quasar.fs.mount.ConnectionUri
 
 import java.util.concurrent.TimeoutException
@@ -86,7 +85,7 @@ object util {
 
     val InvalidHostNameAllowedProp = "invalidHostNameAllowed"
 
-    @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
+    @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
     def settings(cs: ConnectionString, invalidHostNameAllowed: Boolean): Task[MongoClientSettings] = Task.delay {
       import com.mongodb.connection._
 

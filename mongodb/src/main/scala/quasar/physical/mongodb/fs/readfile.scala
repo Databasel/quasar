@@ -19,7 +19,6 @@ package quasar.physical.mongodb.fs
 import quasar.Predef._
 import quasar.fp.TaskRef
 import quasar.fp.numeric.{Natural, Positive}
-import quasar.fp.prism._
 import quasar.fs._
 import quasar.physical.mongodb._
 import quasar.physical.mongodb.fs.bsoncursor._
@@ -61,7 +60,7 @@ object readfile {
     client: MongoClient
   )(implicit
     S0: Task :<: S,
-    S1: MongoErr :<: S
+    S1: PhysErr :<: S
   ): Task[MongoRead ~> Free[S, ?]] =
     TaskRef[ReadState]((0, Map.empty)) map { ref =>
       new (MongoRead ~> Free[S, ?]) {
@@ -112,7 +111,7 @@ object readfile {
         h    <- recordCursor(f, cur)
       } yield h
 
-    Collection.fromPath(f).fold(
+    Collection.fromFile(f).fold(
       err  => pathErr(err).left.point[MongoRead],
       coll => collectionExists(coll).liftM[ReadStateT].ifM(
                 openCursor0(coll) map (_.right[FileSystemError]),

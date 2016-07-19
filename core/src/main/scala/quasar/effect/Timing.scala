@@ -27,7 +27,6 @@ object Timing {
   final case object Timestamp extends Timing[Instant]
   final case object Nanos extends Timing[Long]
 
-  @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
   final class Ops[S[_]](implicit S: Timing :<: S)
     extends LiftedOps[Timing, S] {
 
@@ -54,7 +53,6 @@ object Timing {
       new Ops[S]
   }
 
-  @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
   final class LowLevel[S[_]](implicit S: Timing :<: S)
     extends LiftedOps[Timing, S] {
 

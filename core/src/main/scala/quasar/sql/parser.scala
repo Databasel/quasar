@@ -41,6 +41,11 @@ object ParsingError {
 
 final case class Query(value: String)
 
+sealed trait DerefType[T[_[_]]]
+final case class ObjectDeref[T[_[_]]](expr: T[Sql])      extends DerefType[T]
+final case class ArrayDeref[T[_[_]]](expr: T[Sql])       extends DerefType[T]
+final case class DimChange[T[_[_]]](unop: UnaryOperator) extends DerefType[T]
+
 private[sql] class SQLParser[T[_[_]]: Recursive: Corecursive]
     extends StandardTokenParsers {
   class SqlLexical extends StdLexical with RegexParsers {
@@ -183,8 +188,8 @@ private[sql] class SQLParser[T[_[_]]: Recursive: Corecursive]
       case expr ~ ident => Proj(expr, ident)
     }
 
-  def variable: Parser[T[Sql]] =
-    elem("variable", _.isInstanceOf[lexical.Variable]) ^^ (token => vari[T[Sql]](token.chars).embed)
+  def variable: Parser[Vari[T[Sql]]] =
+    elem("variable", _.isInstanceOf[lexical.Variable]) ^^ (token => Vari[T[Sql]](token.chars))
 
   def defined_expr: Parser[T[Sql]] =
     range_expr * (op("??") ^^^ (IfUndefined(_: T[Sql], _: T[Sql]).embed))
@@ -289,11 +294,6 @@ private[sql] class SQLParser[T[_[_]]: Recursive: Corecursive]
   def pow_expr: Parser[T[Sql]] =
     deref_expr * (op("^") ^^^ (Pow(_: T[Sql], _: T[Sql]).embed))
 
-  sealed trait DerefType
-  case class ObjectDeref(expr: T[Sql]) extends DerefType
-  case class ArrayDeref(expr: T[Sql]) extends DerefType
-  case class DimChange(unop: UnaryOperator) extends DerefType
-
   def unshift_expr: Parser[T[Sql]] =
     op("{") ~> expr <~ op("...") <~ op("}") ^^ (UnshiftMap(_).embed) |
     op("[") ~> expr <~ op("...") <~ op("]") ^^ (UnshiftArray(_).embed)
@@ -301,17 +301,17 @@ private[sql] class SQLParser[T[_[_]]: Recursive: Corecursive]
   def deref_expr: Parser[T[Sql]] = primary_expr ~ (rep(
     (op(".") ~> (
       (ident ^^ (stringLiteral[T[Sql]](_).embed)) ^^ (ObjectDeref(_))))  |
-      op("{*:}")               ^^^ DimChange(FlattenMapKeys)      |
-      (op("{*}") | op("{:*}")) ^^^ DimChange(FlattenMapValues)    |
-      op("{_:}")               ^^^ DimChange(ShiftMapKeys)        |
-      (op("{_}") | op("{:_}")) ^^^ DimChange(ShiftMapValues)      |
+      op("{*:}")               ^^^ DimChange[T](FlattenMapKeys)      |
+      (op("{*}") | op("{:*}")) ^^^ DimChange[T](FlattenMapValues)    |
+      op("{_:}")               ^^^ DimChange[T](ShiftMapKeys)        |
+      (op("{_}") | op("{:_}")) ^^^ DimChange[T](ShiftMapValues)      |
       (op("{") ~> (expr ^^ (ObjectDeref(_))) <~ op("}"))          |
-      op("[*:]")               ^^^ DimChange(FlattenArrayIndices) |
-      (op("[*]") | op("[:*]")) ^^^ DimChange(FlattenArrayValues)  |
-      op("[_:]")               ^^^ DimChange(ShiftArrayIndices)   |
-      (op("[_]") | op("[:_]")) ^^^ DimChange(ShiftArrayValues)    |
+      op("[*:]")               ^^^ DimChange[T](FlattenArrayIndices) |
+      (op("[*]") | op("[:*]")) ^^^ DimChange[T](FlattenArrayValues)  |
+      op("[_:]")               ^^^ DimChange[T](ShiftArrayIndices)   |
+      (op("[_]") | op("[:_]")) ^^^ DimChange[T](ShiftArrayValues)    |
       (op("[") ~> (expr ^^ (ArrayDeref(_))) <~ op("]"))
-    ): Parser[List[DerefType]]) ~ opt(op(".") ~> wildcard) ^^ {
+    ): Parser[List[DerefType[T]]]) ~ opt(op(".") ~> wildcard) ^^ {
     case lhs ~ derefs ~ wild =>
       wild.foldLeft(derefs.foldLeft[T[Sql]](lhs)((lhs, deref) => (deref match {
         case DimChange(unop)  => Unop(lhs, unop)
@@ -353,7 +353,7 @@ private[sql] class SQLParser[T[_[_]]: Recursive: Corecursive]
       case op ~ expr => op(expr).embed
     } |
     function_expr |
-    variable |
+    variable.map(_.embed) |
     literal |
     wildcard |
     array_literal |
@@ -415,6 +415,10 @@ private[sql] class SQLParser[T[_[_]]: Recursive: Corecursive]
       case ident ~ alias =>
         IdentRelationAST[T[Sql]](ident, alias)
     } |
+    variable ~ opt(keyword("as") ~> ident) ^^ {
+      case vari ~ alias =>
+        VariRelationAST[T[Sql]](vari, alias)
+    } |
     op("(") ~> (
       (expr ~ op(")") ~ keyword("as") ~ ident ^^ {
         case expr ~ _ ~ _ ~ alias => ExprRelationAST(expr, alias)
@@ -459,7 +463,4 @@ private[sql] class SQLParser[T[_[_]]: Recursive: Corecursive]
 
   val parse: Query => ParsingError \/ T[Sql] =
     parse0(_).map(_.transAna(repeatedly(normalizeƒ)).makeTables(Nil))
-
-  def parseInContext(sql: Query, basePath: ADir): ParsingError \/ T[Sql] =
-    parse(sql).map(_.mkPathsAbsolute(basePath))
 }

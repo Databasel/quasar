@@ -18,7 +18,8 @@ package quasar.api.services
 
 import quasar.Data
 import quasar.api._, ToQResponse.ops._, ToApiError.ops._
-import quasar.fp._, numeric._, PathyCodecJson._
+import quasar.fp._
+import quasar.fp.numeric._
 import quasar.fs._
 import quasar.Predef._
 
@@ -31,6 +32,7 @@ import org.http4s._
 import org.http4s.dsl._
 import org.http4s.headers.{`Content-Type`, Accept}
 import pathy.Path._
+import pathy.argonaut.PosixCodecJson._
 import scalaz.{Zip => _, _}, Scalaz._
 import scalaz.concurrent.Task
 import scalaz.stream.Process

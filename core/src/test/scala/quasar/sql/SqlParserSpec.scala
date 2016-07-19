@@ -228,6 +228,10 @@ class SQLParserSpec extends Specification with ScalaCheck with DisjunctionMatche
       parse("""SELECT * FROM zips WHERE zips.dt > :start_time AND zips.dt <= :end_time """).toOption should beSome
     }
 
+    "parse simple query with variable as relation" in {
+      parse("""SELECT * FROM :table""").toOption should beSome
+    }
+
     "parse true and false literals" in {
       parse("""SELECT * FROM zips WHERE zips.isNormalized = TRUE AND zips.isFruityFlavored = FALSE""").toOption should beSome
     }

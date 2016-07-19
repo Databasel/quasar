@@ -23,6 +23,7 @@ import optimize.pipeline._
 import quasar.javascript._, Js._
 import quasar.jscore, jscore.{JsCore, JsFn}
 import quasar.physical.mongodb.workflowtask._
+import quasar.qscript._
 
 import matryoshka._, Recursive.ops._, FunctorT.ops._
 import monocle.syntax.all._
@@ -164,7 +165,7 @@ object Workflow {
     }
 
   def task(fop: Crystallized): WorkflowTask =
-    (finish(_, _)).tupled(fop.op.para(crush))._2.translate(normalize)
+    (finish(_, _)).tupled(fop.op.para(crush))._2.transAna(normalize)
 
   val coalesceƒ: WorkflowF[Workflow] => Option[WorkflowF[Workflow]] = {
     case $Match(src, selector) => src.unFix match {
@@ -776,19 +777,19 @@ object Workflow {
   }
   val $group = $Group.make _
 
-  final case class $Sort[A](src: A, value: NonEmptyList[(BsonField, SortType)])
+  final case class $Sort[A](src: A, value: NonEmptyList[(BsonField, SortDir)])
       extends ShapePreservingF[A]("$sort") {
     def reparent[B](newSrc: B) = copy(src = newSrc)
     // Note: ListMap preserves the order of entries.
     def rhs: Bson.Doc = $Sort.keyBson(value)
   }
   object $Sort {
-    def make(value: NonEmptyList[(BsonField, SortType)])(src: Workflow):
+    def make(value: NonEmptyList[(BsonField, SortDir)])(src: Workflow):
         Workflow =
       Fix(coalesce($Sort(src, value)))
 
-    def keyBson(value: NonEmptyList[(BsonField, SortType)]) =
-      Bson.Doc(ListMap((value.map { case (k, t) => k.asText -> t.bson }).list.toList: _*))
+    def keyBson(value: NonEmptyList[(BsonField, SortDir)]) =
+      Bson.Doc(ListMap((value.map { case (k, t) => k.asText -> sortDirToBson(t) }).list.toList: _*))
   }
   val $sort = $Sort.make _
 
@@ -846,7 +847,7 @@ object Workflow {
   val $geoNear = $GeoNear.make _
 
   sealed trait MapReduceF[A] extends SingleSourceF[A] {
-    def newMR(base: DocVar, src: WorkflowTask, sel: Option[Selector], sort: Option[NonEmptyList[(BsonField, SortType)]], count: Option[Long]): (DocVar, WorkflowTask)
+    def newMR(base: DocVar, src: WorkflowTask, sel: Option[Selector], sort: Option[NonEmptyList[(BsonField, SortDir)]], count: Option[Long]): (DocVar, WorkflowTask)
   }
 
   /**
@@ -858,7 +859,7 @@ object Workflow {
   final case class $Map[A](src: A, fn: Js.AnonFunDecl, scope: Scope) extends MapReduceF[A] {
     import $Map._
 
-    def newMR(base: DocVar, src: WorkflowTask, sel: Option[Selector], sort: Option[NonEmptyList[(BsonField, SortType)]], count: Option[Long]) =
+    def newMR(base: DocVar, src: WorkflowTask, sel: Option[Selector], sort: Option[NonEmptyList[(BsonField, SortDir)]], count: Option[Long]) =
       (ExprVar,
         MapReduceTask(
           src,
@@ -1019,7 +1020,7 @@ object Workflow {
       }
     }
 
-    def newMR(base: DocVar, src: WorkflowTask, sel: Option[Selector], sort: Option[NonEmptyList[(BsonField, SortType)]], count: Option[Long]) =
+    def newMR(base: DocVar, src: WorkflowTask, sel: Option[Selector], sort: Option[NonEmptyList[(BsonField, SortDir)]], count: Option[Long]) =
       raw.newMR(base, src, sel, sort, count)
 
     def reparent[B](newSrc: B) = copy(src = newSrc)
@@ -1076,7 +1077,7 @@ object Workflow {
       extends MapReduceF[A] {
     import $FlatMap._
 
-    def newMR(base: DocVar, src: WorkflowTask, sel: Option[Selector], sort: Option[NonEmptyList[(BsonField, SortType)]], count: Option[Long]) =
+    def newMR(base: DocVar, src: WorkflowTask, sel: Option[Selector], sort: Option[NonEmptyList[(BsonField, SortDir)]], count: Option[Long]) =
       (ExprVar,
         MapReduceTask(
           src,
@@ -1133,7 +1134,7 @@ object Workflow {
     */
   final case class $Reduce[A](src: A, fn: Js.AnonFunDecl, scope: Scope)
       extends MapReduceF[A] {
-    def newMR(base: DocVar, src: WorkflowTask, sel: Option[Selector], sort: Option[NonEmptyList[(BsonField, SortType)]], count: Option[Long]) =
+    def newMR(base: DocVar, src: WorkflowTask, sel: Option[Selector], sort: Option[NonEmptyList[(BsonField, SortDir)]], count: Option[Long]) =
       (ExprVar,
         MapReduceTask(
           src,

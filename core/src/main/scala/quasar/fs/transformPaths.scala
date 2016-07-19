@@ -18,7 +18,6 @@ package quasar.fs
 
 import quasar.LogicalPlan, LogicalPlan.ReadF
 import quasar.fp.free.{flatMapSNT, liftFT, transformIn}
-import quasar.fp.prism._
 
 import matryoshka.{FunctorT, Fix}, FunctorT.ops._
 import monocle.{Lens, Optional}
@@ -168,12 +167,12 @@ object transformPaths {
 
       def apply[A](qf: QueryFile[A]) = qf match {
         case ExecutePlan(lp, out) =>
-          Q.execute(lp.translate(transformLPPaths(translateFile)), inPath(out))
+          Q.execute(lp.transAna(transformLPPaths(translateFile)), inPath(out))
             .bimap(transformErrorPath(outPath), outPath(_))
             .run.run
 
         case EvaluatePlan(lp) =>
-          U.eval(lp.translate(transformLPPaths(translateFile)))
+          U.eval(lp.transAna(transformLPPaths(translateFile)))
             .leftMap(transformErrorPath(outPath))
             .run.run
 
@@ -186,7 +185,7 @@ object transformPaths {
           U.close(h)
 
         case Explain(lp) =>
-          Q.explain(lp.translate(transformLPPaths(translateFile)))
+          Q.explain(lp.transAna(transformLPPaths(translateFile)))
             .leftMap(transformErrorPath(outPath))
             .run.run
 
@@ -252,7 +251,7 @@ object transformPaths {
     fsPathError.modify(f(_)) compose
     fsUnkRdError.modify(f(_)) compose
     fsUnkWrError.modify(f(_)) compose
-    fsPlannerError.modify(_ translate transformLPPaths(natToFunction[AbsPath,AbsPath,File](f)))
+    fsPlannerError.modify(_.transAna(transformLPPaths(natToFunction[AbsPath,AbsPath,File](f))))
 
   private def transformLPPaths(f: AFile => AFile): LogicalPlan ~> LogicalPlan =
     new (LogicalPlan ~> LogicalPlan) {

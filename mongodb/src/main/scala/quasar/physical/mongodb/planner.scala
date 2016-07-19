@@ -23,6 +23,7 @@ import quasar.fs.mkAbsolute
 import quasar.javascript._
 import quasar.jscore, jscore.{JsCore, JsFn}
 import quasar.namegen._
+import quasar.qscript._
 import quasar.std.StdLib._
 import Type._
 import Workflow._
@@ -316,7 +317,23 @@ object MongoDbPlanner {
           )
         case ObjectProject => Arity2(Access(_, _))
         case ArrayProject  => Arity2(Access(_, _))
-        case _ => -\/(UnsupportedFunction(func.name, None))
+        case MakeObject => args match {
+          case Sized(a1, a2) => (HasStr(a1) |@| HasJs(a2)) {
+            case (field, (sel, inputs)) => 
+              (({ case (list: List[JsFn]) => JsFn(JsFn.defaultName, Obj(ListMap(Name(field) -> sel(list)(Ident(JsFn.defaultName))))) },
+                inputs.map(There(1, _))): PartialJs)
+          }
+        }
+        case DeleteField => args match {
+          case Sized(a1, a2) => (HasJs(a1) |@| HasStr(a2)) {
+            case ((sel, inputs), field) => 
+              (({ case (list: List[JsFn]) => JsFn(JsFn.defaultName, Call(ident("remove"),
+                List(sel(list)(Ident(JsFn.defaultName)), Literal(Js.Str(field))))) },
+                inputs.map(There(0, _))): PartialJs)
+          }
+        }
+        case MakeArray => Arity1(x => Arr(List(x)))
+        case _ => -\/(UnsupportedFunction(func.name, "in JS planner".some))
       }
     }
 
@@ -530,7 +547,7 @@ object MongoDbPlanner {
 
         case (Constantly, Sized(const, _)) => const._2
 
-        case _ => -\/(UnsupportedFunction(func.name, None))
+        case _ => -\/(UnsupportedFunction(func.name, "in Selector planner".some))
       }
     }
 
@@ -613,11 +630,11 @@ object MongoDbPlanner {
       case n                      => n.head._2.map(List(_))
     }
 
-    val HasSortDirs: Ann => OutputM[List[SortType]] = {
-      def isSortDir(node: LogicalPlan[Ann]): OutputM[SortType] =
+    val HasSortDirs: Ann => OutputM[List[SortDir]] = {
+      def isSortDir(node: LogicalPlan[Ann]): OutputM[SortDir] =
         node match {
-          case HasData(Data.Str("ASC"))  => \/-(Ascending)
-          case HasData(Data.Str("DESC")) => \/-(Descending)
+          case HasData(Data.Str("ASC"))  => \/-(SortDir.Ascending)
+          case HasData(Data.Str("DESC")) => \/-(SortDir.Descending)
           case x => -\/(InternalError("malformed sort dir: " + x))
         }
 
@@ -645,7 +662,8 @@ object MongoDbPlanner {
         }
       }
 
-      val HasInt64: Ann => OutputM[Long] = HasLiteral(_).flatMap {
+      val HasInt: Ann => OutputM[Long] = HasLiteral(_).flatMap {
+        case Bson.Int32(v) => \/-(v.toLong)
         case Bson.Int64(v) => \/-(v)
         case x => -\/(FuncApply(func.name, "64-bit integer", x.toString))
       }
@@ -747,9 +765,9 @@ object MongoDbPlanner {
               }))
           }
         case Drop =>
-          lift(Arity2(HasWorkflow, HasInt64).map((skip(_, _)).tupled))
+          lift(Arity2(HasWorkflow, HasInt).map((skip(_, _)).tupled))
         case Take =>
-          lift(Arity2(HasWorkflow, HasInt64).map((limit(_, _)).tupled))
+          lift(Arity2(HasWorkflow, HasInt).map((limit(_, _)).tupled))
         case InnerJoin | LeftOuterJoin | RightOuterJoin | FullOuterJoin =>
           args match {
             case Sized(left, right, comp) =>
@@ -808,7 +826,7 @@ object MongoDbPlanner {
         case Not        => expr1($not(_))
 
         case ArrayLength =>
-          lift(Arity2(HasWorkflow, HasInt64)).flatMap {
+          lift(Arity2(HasWorkflow, HasInt)).flatMap {
             case (p, 1)   => mapExpr(p)($size(_))
             case (_, dim) => fail(FuncApply(func.name, "lower array dimension", dim.toString))
           }
@@ -821,16 +839,16 @@ object MongoDbPlanner {
                   mapExpr(p)(v => $divide($year(v), $literal(Bson.Int32(100))))
                 case "day"          => mapExpr(p)($dayOfMonth(_))
                 case "decade"       =>
-                  mapExpr(p)(x => $divide($year(x), $literal(Bson.Int64(10))))
+                  mapExpr(p)(x => $divide($year(x), $literal(Bson.Int32(10))))
                 case "dow"          =>
-                  mapExpr(p)(x => $add($dayOfWeek(x), $literal(Bson.Int64(-1))))
+                  mapExpr(p)(x => $add($dayOfWeek(x), $literal(Bson.Int32(-1))))
                 case "doy"          => mapExpr(p)($dayOfYear(_))
                 // TODO: epoch
                 case "hour"         => mapExpr(p)($hour(_))
                 case "isodow"       => mapExpr(p)(x =>
-                  $cond($eq($dayOfWeek(x), $literal(Bson.Int64(1))),
-                    $literal(Bson.Int64(7)),
-                    $add($dayOfWeek(x), $literal(Bson.Int64(-1)))))
+                  $cond($eq($dayOfWeek(x), $literal(Bson.Int32(1))),
+                    $literal(Bson.Int32(7)),
+                    $add($dayOfWeek(x), $literal(Bson.Int32(-1)))))
                 // TODO: isoyear
                 case "microseconds" =>
                   mapExpr(p)(v =>
@@ -886,7 +904,7 @@ object MongoDbPlanner {
         case ObjectProject =>
           lift(Arity2(HasWorkflow, HasText).flatMap((projectField(_, _)).tupled))
         case ArrayProject =>
-          lift(Arity2(HasWorkflow, HasInt64).flatMap {
+          lift(Arity2(HasWorkflow, HasInt).flatMap {
             case (p, index) => projectIndex(p, index.toInt)
           })
         case DeleteField  =>
@@ -899,7 +917,7 @@ object MongoDbPlanner {
         case DistinctBy   =>
           lift(Arity2(HasWorkflow, HasKeys)).flatMap((distinctBy(_, _)).tupled)
 
-        case _ => fail(UnsupportedFunction(func.name, None))
+        case _ => fail(UnsupportedFunction(func.name, "in workflow planner".some))
       }
     }
 
@@ -927,7 +945,7 @@ object MongoDbPlanner {
     node => node match {
       case ReadF(path) =>
         // Documentation on `QueryFile` guarantees absolute paths, so calling `mkAbsolute`
-        state(Collection.fromPath(mkAbsolute(rootDir, path)).bimap(PlanPathError, WorkflowBuilder.read))
+        state(Collection.fromFile(mkAbsolute(rootDir, path)).bimap(PlanPathError, WorkflowBuilder.read))
       case ConstantF(data) =>
         state(BsonCodec.fromData(data).bimap(
           κ(NonRepresentableData(data)),

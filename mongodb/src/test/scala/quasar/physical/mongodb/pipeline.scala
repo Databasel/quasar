@@ -16,15 +16,15 @@
 
 package quasar.physical.mongodb
 
+import quasar._
 import quasar.Predef._
+import quasar.qscript._
+import quasar.specs2._
 
 import org.scalacheck._
 import org.specs2.mutable._
 import org.specs2.ScalaCheck
 import scalaz._
-
-import quasar._
-import quasar.specs2._
 
 class PipelineSpec extends Specification with ScalaCheck with ArbBsonField with PendingWithAccurateCoverage {
   import quasar.physical.mongodb.accumulator._
@@ -113,7 +113,7 @@ class PipelineSpec extends Specification with ScalaCheck with ArbBsonField with 
 
     def sortGen = for {
       c <- Gen.alphaChar
-    } yield ShapePreservingPipelineOp($Sort((), NonEmptyList(BsonField.Name("name1") -> Ascending)))
+    } yield ShapePreservingPipelineOp($Sort((), NonEmptyList(BsonField.Name("name1") -> SortDir.Ascending)))
 
     List(matchGen, limitGen, skipGen, sortGen)
   }

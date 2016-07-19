@@ -26,7 +26,7 @@ sealed trait ConsoleIO[A]
 object ConsoleIO {
   final case class PrintLn(message: String) extends ConsoleIO[Unit]
 
-  @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   final class Ops[S[_]](implicit S: ConsoleIO :<: S)
     extends LiftedOps[ConsoleIO, S] {
 

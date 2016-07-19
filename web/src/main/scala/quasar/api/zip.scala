@@ -56,7 +56,7 @@ object Zip {
     class Buffer {
       // Assumes that the var is private to Buffer and exposed methods are private to the
       // enclosing method. Further assumes that usage by Process is without contention.
-      @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.Var"))
+      @SuppressWarnings(Array("org.wartremover.warts.Var"))
       private var chunks = ByteVector.empty
 
       private def append(bytes: ByteVector) = chunks = chunks ++ bytes

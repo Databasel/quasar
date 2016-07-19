@@ -18,6 +18,7 @@ package quasar.physical.mongodb
 
 import quasar.Predef._
 import quasar.TreeMatchers
+import quasar.qscript._
 
 import matryoshka._, FunctorT.ops._
 import org.specs2.mutable._
@@ -378,7 +379,7 @@ class OptimizeSpecs extends Specification with TreeMatchers {
           Reshape(ListMap(
             BsonField.Name("city") -> \/-($var(DocField(BsonField.Name("__tmp0") \ BsonField.Name("city")))))),
           IgnoreId),
-        $sort(NonEmptyList(BsonField.Name("city") -> Ascending)))
+        $sort(NonEmptyList(BsonField.Name("city") -> SortDir.Ascending)))
 
       reorderOps(op) must beTree(op)
     }

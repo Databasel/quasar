@@ -22,6 +22,8 @@ import quasar.fp.binder._
 import quasar.fs.{FPath, refineTypeAbs}
 import quasar.namegen._
 
+import scala.Some
+
 import matryoshka._, Recursive.ops._, FunctorT.ops._
 import scalaz._, Scalaz._, Validation.success, Validation.FlatMap._
 import shapeless.{:: => _, Id => _, _}
@@ -155,7 +157,7 @@ object LogicalPlan {
   // TODO we create a custom `unapply` to bypass a scalac pattern matching bug
   // https://issues.scala-lang.org/browse/SI-5900
   object InvokeFUnapply {
-    def unapply[A, N <: Nat](in: InvokeF[A, N]): Option[(GenericFunc[N], Func.Input[A, N])] = Some((in.func, in.values))
+    def unapply[A, N <: Nat](in: InvokeF[A, N]): Some[(GenericFunc[N], Func.Input[A, N])] = Some((in.func, in.values))
   }
   object Invoke {
     def apply[N <: Nat](func: GenericFunc[N], values: Func.Input[Fix[LogicalPlan], N]): Fix[LogicalPlan] =

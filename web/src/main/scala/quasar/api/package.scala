@@ -20,7 +20,7 @@ import quasar.Predef._
 import quasar.Errors.convertError
 import quasar.api.ToQResponse.ops._
 import quasar.effect.Failure
-import quasar.fp._, PathyCodecJson._
+import quasar.fp._
 import quasar.fs._
 
 import java.io.File
@@ -33,23 +33,24 @@ import org.http4s.server._
 import org.http4s.server.staticcontent._
 import org.http4s.util._
 import pathy.Path, Path._
+import pathy.argonaut.PosixCodecJson._
 import scalaz.{Failure => _, _}, Scalaz._
 import scalaz.concurrent.Task
 
 package object api {
-  // TODO: Names
-  type ResponseT[F[_], A] = EitherT[F, Response, A]
-  type ResponseOr[A] = ResponseT[Task, A]
+  type ResponseT[F[_], A]   = EitherT[F, Response, A]
+  type ResponseIOT[F[_], A] = EitherT[F, Task[Response], A]
+  type ResponseOr[A]        = ResponseT[Task, A]
 
   /** Interpret a `Failure` effect into `ResponseOr` given evidence the
     * failure type can be converted to a `QResponse`.
     */
   def failureResponseOr[E](implicit E: ToQResponse[E, ResponseOr])
     : Failure[E, ?] ~> ResponseOr =
-    joinResponseOr compose failureResponseT[Task, E]
+    joinResponseOr compose failureResponseIOT[Task, E]
 
-  def failureResponseT[F[_]: Monad, E](implicit E: ToQResponse[E, ResponseOr])
-    : Failure[E, ?] ~> EitherT[F, Task[Response], ?] = {
+  def failureResponseIOT[F[_]: Monad, E](implicit E: ToQResponse[E, ResponseOr])
+    : Failure[E, ?] ~> ResponseIOT[F, ?] = {
 
     def errToResp(e: E): Task[Response] =
       e.toResponse[ResponseOr].toHttpResponse(NaturalTransformation.refl)
@@ -58,9 +59,9 @@ package object api {
   }
 
   /** Sequences the `Response` on the left with the outer `Task`. */
-  val joinResponseOr: EitherT[Task, Task[Response], ?] ~> ResponseOr =
-    new (EitherT[Task, Task[Response], ?] ~> ResponseOr) {
-      def apply[A](et: EitherT[Task, Task[Response], A]) =
+  val joinResponseOr: ResponseIOT[Task, ?] ~> ResponseOr =
+    new (ResponseIOT[Task, ?] ~> ResponseOr) {
+      def apply[A](et: ResponseIOT[Task, A]) =
         EitherT(et.run.flatMap(_.fold(
           _.map(_.left[A]),
           _.right[Response].point[Task])))

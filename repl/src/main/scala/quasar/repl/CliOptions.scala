@@ -29,7 +29,7 @@ object CliOptions {
   val default: CliOptions =
     CliOptions(None)
 
-  @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.NonUnitStatements"))
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   val parser: OptionParser[CliOptions] = new OptionParser[CliOptions]("quasar") {
     head("quasar", BuildInfo.version)
 

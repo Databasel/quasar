@@ -17,13 +17,21 @@
 package quasar
 
 import quasar.Predef._
+import quasar.fp.κ
 import quasar.SemanticError._
-import quasar.sql.{Sql, Query, Vari}
+import quasar.sql.{Sql, Ident, Query, Select, Vari, TableRelationAST, VariRelationAST}
 
 import matryoshka._, Recursive.ops._
+import pathy.Path.posixCodec
 import scalaz._, Scalaz._
 
-final case class Variables(value: Map[VarName, VarValue])
+final case class Variables(value: Map[VarName, VarValue]) {
+  def lookup(name: VarName): SemanticError \/ Fix[Sql] =
+    value.get(name).fold[SemanticError \/ Fix[Sql]](
+      UnboundVariable(name).left)(
+      varValue => sql.fixParser.parse(Query(varValue.value))
+        .leftMap(VariableParseError(name, varValue, _)))
+}
 final case class VarName(value: String) {
   override def toString = ":" + value
 }
@@ -38,10 +46,22 @@ object Variables {
   def substVarsƒ(vars: Variables):
       AlgebraM[SemanticError \/ ?, Sql, Fix[Sql]] = {
     case Vari(name) =>
-      vars.value.get(VarName(name)).fold[SemanticError \/ Fix[Sql]](
-        UnboundVariable(VarName(name)).left)(
-        varValue => sql.fixParser.parse(Query(varValue.value))
-          .leftMap(VariableParseError(VarName(name), varValue, _)))
+      vars.lookup(VarName(name))
+    case sel @ Select(dist, proj, Some(rel), filter, group, order) =>
+      rel.transformM[SemanticError \/ ?, Fix[Sql]]({
+        case VariRelationAST(vari, alias) =>
+          val varName = VarName(vari.symbol)
+          vars.lookup(varName) flatMap {
+            case Fix(Ident(name)) =>
+              posixCodec.parsePath(Some(_), Some(_), κ(None), κ(None))(name).cata(
+                TableRelationAST(_, alias).right,
+                GenericError("bad path: " + name + " (note: absolute file path required)").left)  // FIXME
+            case x =>
+              GenericError("not a valid table name: " + x).left  // FIXME
+          }
+        case r => r.right
+      }, _.right[SemanticError]).map(rel =>
+        sel.copy(relations = rel.some).embed)
     case x => x.embed.right
   }
 
